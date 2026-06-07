@@ -3,20 +3,24 @@ import {
   buttonValueByCode,
   dpadAxisX,
   dpadAxisY,
+  dpadDirectionForElement,
   dpadDirectionValue,
   getElementRenderState,
   getDpadDirectionRenderState,
   isElementActive,
+  shouldClipSharedDpadDirectionElement,
   shouldRenderElement,
   triggerValue,
   validateOverlayPresetElements
 } from "./overlayMapping";
 import type { ControllerSnapshot, OverlayElement } from "../types/controller";
 import xboxPresetFile from "../../public/vendor/input-overlay/xbox-controller/xbox-controller.json";
+import xboxOnePresetFile from "../../public/vendor/input-overlay/xbox-one-controller/xbox-one-controller.json";
 import dualSensePresetFile from "../../public/vendor/input-overlay/dualsense/dualsense.json";
 import type { OverlayPresetFile } from "../types/controller";
 
 const xboxPreset = xboxPresetFile as unknown as OverlayPresetFile;
+const xboxOnePreset = xboxOnePresetFile as unknown as OverlayPresetFile;
 const dualSensePreset = dualSensePresetFile as unknown as OverlayPresetFile;
 
 function snapshot(
@@ -206,6 +210,32 @@ describe("overlay mapping", () => {
     expect(
       shouldRenderElement(dpad, getDpadDirectionRenderState("down", upOnly))
     ).toBe(false);
+  });
+
+  it("detects Xbox D-Pad sprites that share one visual area and need directional clipping", () => {
+    const directions = ["up", "down", "left", "right"] as const;
+
+    for (const direction of directions) {
+      const xboxElement = presetElement(
+        xboxPreset,
+        (presetElement) => presetElement.id === `dpad_${direction}`
+      );
+      const xboxOneElement = presetElement(
+        xboxOnePreset,
+        (presetElement) => presetElement.id === `dpad_${direction}`
+      );
+
+      expect(dpadDirectionForElement(xboxElement)).toBe(direction);
+      expect(
+        shouldClipSharedDpadDirectionElement(xboxElement, xboxPreset.elements)
+      ).toBe(true);
+      expect(
+        shouldClipSharedDpadDirectionElement(
+          xboxOneElement,
+          xboxOnePreset.elements
+        )
+      ).toBe(false);
+    }
   });
 
   it("renders base and stick layers even when their active value is zero", () => {

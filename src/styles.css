@@ -257,10 +257,33 @@ textarea {
 
 .sprite-layer.sprite-active {
   filter:
+    hue-rotate(var(--sprite-active-hue, 0deg))
     brightness(1.36)
-    saturate(1.42)
+    saturate(var(--sprite-active-saturation, 1.42))
     drop-shadow(0 0 4px rgba(255, 255, 255, 0.82))
-    drop-shadow(0 0 15px rgba(125, 222, 223, 0.82));
+    drop-shadow(0 0 15px var(--sprite-active-glow, rgba(125, 222, 223, 0.82)));
+}
+
+.sprite-button-a.sprite-active {
+  --sprite-active-glow: rgba(72, 221, 111, 0.88);
+}
+
+.sprite-button-b.sprite-active {
+  --sprite-active-hue: -120deg;
+  --sprite-active-saturation: 1.58;
+  --sprite-active-glow: rgba(255, 77, 77, 0.9);
+}
+
+.sprite-button-x.sprite-active {
+  --sprite-active-hue: 118deg;
+  --sprite-active-saturation: 1.72;
+  --sprite-active-glow: rgba(64, 158, 255, 0.9);
+}
+
+.sprite-button-y.sprite-active {
+  --sprite-active-hue: -62deg;
+  --sprite-active-saturation: 1.5;
+  --sprite-active-glow: rgba(255, 215, 76, 0.92);
 }
 
 .sprite-type-0 {

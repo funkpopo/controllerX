@@ -163,6 +163,33 @@ export function getDpadDirectionRenderState(
   };
 }
 
+export function dpadDirectionForElement(
+  element: OverlayElement
+): DpadDirection | null {
+  return dpadDirectionFromId(element.id);
+}
+
+export function shouldClipSharedDpadDirectionElement(
+  element: OverlayElement,
+  elements: OverlayElement[]
+) {
+  const direction = dpadDirectionForElement(element);
+  if (element.type !== 2 || direction === null) {
+    return false;
+  }
+
+  return elements.some(
+    (other) =>
+      other !== element &&
+      other.type === 2 &&
+      dpadDirectionForElement(other) !== null &&
+      other.pos[0] === element.pos[0] &&
+      other.pos[1] === element.pos[1] &&
+      other.mapping[2] === element.mapping[2] &&
+      other.mapping[3] === element.mapping[3]
+  );
+}
+
 export function dpadDirectionValue(
   direction: DpadDirection,
   controller: ControllerSnapshot
@@ -204,16 +231,17 @@ export function isElementActive(element: OverlayElement, state: ElementRenderSta
 
 export function buttonValue(element: OverlayElement, controller: ControllerSnapshot) {
   const id = element.id.toLowerCase();
+  const dpadDirection = dpadDirectionForElement(element);
 
   if (typeof element.code === "number") {
     const byCode = buttonValueByCode(element.code, controller);
     return byCode;
   }
 
-  if (id.includes("dpad_up")) return controller.buttons.dpadUp;
-  if (id.includes("dpad_down")) return controller.buttons.dpadDown;
-  if (id.includes("dpad_left")) return controller.buttons.dpadLeft;
-  if (id.includes("dpad_right")) return controller.buttons.dpadRight;
+  if (dpadDirection === "up") return controller.buttons.dpadUp;
+  if (dpadDirection === "down") return controller.buttons.dpadDown;
+  if (dpadDirection === "left") return controller.buttons.dpadLeft;
+  if (dpadDirection === "right") return controller.buttons.dpadRight;
   if (id.includes("select") || id.includes("share") || id.includes("back")) {
     return controller.buttons.select;
   }
@@ -344,10 +372,7 @@ function canMapButtonElementById(id: string) {
   const normalized = id.toLowerCase();
 
   return (
-    normalized.includes("dpad_up") ||
-    normalized.includes("dpad_down") ||
-    normalized.includes("dpad_left") ||
-    normalized.includes("dpad_right") ||
+    dpadDirectionFromId(normalized) !== null ||
     normalized.includes("select") ||
     normalized.includes("share") ||
     normalized.includes("back") ||
@@ -375,6 +400,21 @@ function canMapButtonElementById(id: string) {
     normalized.includes(" r1") ||
     normalized === "rs"
   );
+}
+
+function dpadDirectionFromId(id: string): DpadDirection | null {
+  const normalized = id.toLowerCase().replace(/[^a-z0-9]+/g, "_");
+
+  for (const direction of DPAD_DIRECTIONS) {
+    if (
+      normalized.includes(`dpad_${direction}`) ||
+      normalized.includes(`d_pad_${direction}`)
+    ) {
+      return direction;
+    }
+  }
+
+  return null;
 }
 
 function buttonIdIncludesLeft(id: string) {

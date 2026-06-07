@@ -1,9 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
   DPAD_DIRECTIONS,
+  dpadDirectionForElement,
   getElementRenderState,
   getDpadDirectionRenderState,
   isElementActive,
+  shouldClipSharedDpadDirectionElement,
   shouldRenderElement,
   validateOverlayPresetElements,
   type DpadDirection,
@@ -153,6 +155,8 @@ export function ControllerOverlay({
                 image={loadedPreset.image}
                 element={element}
                 renderState={renderState}
+                clipPath={sharedDpadDirectionClipPath(element, loadedPreset.elements)}
+                dataDirection={sharedDpadDirection(element, loadedPreset.elements)}
               />
             )
           )}
@@ -216,6 +220,7 @@ function SpriteLayer({
 }) {
   const [sourceX, sourceY, width, height] = element.mapping;
   const [left, top] = element.pos;
+  const dpadDirection = dpadDirectionForElement(element);
 
   if (!shouldRenderElement(element, renderState)) {
     return null;
@@ -236,6 +241,8 @@ function SpriteLayer({
       className={[
         "sprite-layer",
         `sprite-type-${element.type}`,
+        elementClassName(element),
+        dpadDirection ? `sprite-dpad-${dpadDirection}` : "",
         className,
         active ? "sprite-active" : ""
       ]
@@ -269,6 +276,35 @@ function dpadDirectionClipPath(direction: DpadDirection) {
     case "right":
       return "inset(33% 0 33% 50%)";
   }
+}
+
+function sharedDpadDirection(
+  element: OverlayElement,
+  elements: OverlayElement[]
+) {
+  if (!shouldClipSharedDpadDirectionElement(element, elements)) {
+    return undefined;
+  }
+
+  return dpadDirectionForElement(element) ?? undefined;
+}
+
+function sharedDpadDirectionClipPath(
+  element: OverlayElement,
+  elements: OverlayElement[]
+) {
+  const direction = sharedDpadDirection(element, elements);
+  return direction ? dpadDirectionClipPath(direction) : undefined;
+}
+
+function elementClassName(element: OverlayElement) {
+  const normalizedId = element.id.toLowerCase();
+
+  if (element.type === 2 && ["a", "b", "x", "y"].includes(normalizedId)) {
+    return `sprite-button-${normalizedId}`;
+  }
+
+  return "";
 }
 
 function DebugLabel({
