@@ -14,6 +14,7 @@ import {
   hasRealConnectEvent,
   hasRealDisconnectEvent,
   isAxisRequirementCovered,
+  requiredButtonInputs,
   summarizeCoverage,
   updateInputCoverage,
   type HardwareObservation,
@@ -111,7 +112,14 @@ export function HardwareVerificationPanel({
     });
   }, [controller, visible]);
 
-  const coverageSummary = useMemo(() => summarizeCoverage(coverage), [coverage]);
+  const coverageSummary = useMemo(
+    () => summarizeCoverage(coverage, expectedProfileId),
+    [coverage, expectedProfileId]
+  );
+  const requiredButtons = useMemo(
+    () => requiredButtonInputs(expectedProfileId),
+    [expectedProfileId]
+  );
   const sessionDeviceEvents = useMemo(
     () => deviceEvents.filter((event) => event.receivedAtMs >= sessionStartedAtMs),
     [deviceEvents, sessionStartedAtMs]
@@ -270,7 +278,18 @@ export function HardwareVerificationPanel({
       <ProgressLine label="Manual" value={manualCovered} total={manualTotal} />
 
       <section className="verification-section">
-        <h2>Buttons</h2>
+        <h2>Required buttons</h2>
+        <div className="verification-grid">
+          {requiredButtons.map((button) => (
+            <span key={button.key} className={coverage.buttons[button.key] ? "complete" : ""}>
+              {button.label}
+            </span>
+          ))}
+        </div>
+      </section>
+
+      <section className="verification-section">
+        <h2>All button fields</h2>
         <div className="verification-grid">
           {BUTTON_INPUTS.map((button) => (
             <span key={button.key} className={coverage.buttons[button.key] ? "complete" : ""}>

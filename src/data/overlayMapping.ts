@@ -19,7 +19,13 @@ export const INPUT_OVERLAY_BUTTON_CODES = {
   dpadUp: 11,
   dpadDown: 12,
   dpadLeft: 13,
-  dpadRight: 14
+  dpadRight: 14,
+  misc1: 15,
+  paddle1: 16,
+  paddle2: 17,
+  paddle3: 18,
+  paddle4: 19,
+  touchpad: 20
 } as const;
 
 const SUPPORTED_BUTTON_CODE_LABELS = new Map<number, string>(
@@ -168,6 +174,22 @@ export function buttonValue(element: OverlayElement, controller: ControllerSnaps
   if (id.includes("guide") || id.includes("ps button") || id === "ps") {
     return controller.buttons.mode;
   }
+  if (id.includes("mute")) return controller.buttons.misc1;
+  if (id.includes("touchpad") || id.includes("touch pad")) {
+    return controller.buttons.touchpad;
+  }
+  if (id.includes("paddle 1") || id.includes("paddle1")) {
+    return controller.buttons.paddle1;
+  }
+  if (id.includes("paddle 2") || id.includes("paddle2")) {
+    return controller.buttons.paddle2;
+  }
+  if (id.includes("paddle 3") || id.includes("paddle3")) {
+    return controller.buttons.paddle3;
+  }
+  if (id.includes("paddle 4") || id.includes("paddle4")) {
+    return controller.buttons.paddle4;
+  }
   if (id.includes("left bumper") || id.includes(" l1") || id === "ls") {
     return id === "ls" ? controller.buttons.leftThumb : controller.buttons.leftBumper;
   }
@@ -212,6 +234,18 @@ export function buttonValueByCode(code: number, controller: ControllerSnapshot) 
       return controller.buttons.dpadLeft;
     case 14:
       return controller.buttons.dpadRight;
+    case 15:
+      return controller.buttons.misc1;
+    case 16:
+      return controller.buttons.paddle1;
+    case 17:
+      return controller.buttons.paddle2;
+    case 18:
+      return controller.buttons.paddle3;
+    case 19:
+      return controller.buttons.paddle4;
+    case 20:
+      return controller.buttons.touchpad;
     default:
       throw new Error(`Unsupported input-overlay button code ${code}.`);
   }
@@ -270,6 +304,17 @@ function canMapButtonElementById(id: string) {
     normalized.includes("guide") ||
     normalized.includes("ps button") ||
     normalized === "ps" ||
+    normalized.includes("mute") ||
+    normalized.includes("touchpad") ||
+    normalized.includes("touch pad") ||
+    normalized.includes("paddle 1") ||
+    normalized.includes("paddle1") ||
+    normalized.includes("paddle 2") ||
+    normalized.includes("paddle2") ||
+    normalized.includes("paddle 3") ||
+    normalized.includes("paddle3") ||
+    normalized.includes("paddle 4") ||
+    normalized.includes("paddle4") ||
     normalized.includes("left bumper") ||
     normalized.includes(" l1") ||
     normalized === "ls" ||

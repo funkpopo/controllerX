@@ -27,7 +27,13 @@ export const EMPTY_CONTROLLER_STATE: ControllerSnapshot = {
     dpadUp: 0,
     dpadDown: 0,
     dpadLeft: 0,
-    dpadRight: 0
+    dpadRight: 0,
+    misc1: 0,
+    paddle1: 0,
+    paddle2: 0,
+    paddle3: 0,
+    paddle4: 0,
+    touchpad: 0
   },
   axes: {
     leftStickX: 0,
@@ -70,4 +76,3 @@ export function useControllerState(): ControllerSnapshot {
 
   return state;
 }
-

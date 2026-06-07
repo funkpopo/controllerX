@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import {
   getElementRenderState,
   shouldRenderElement,
+  validateOverlayPresetElements,
   type ElementRenderState
 } from "../data/overlayMapping";
 import type {
@@ -55,6 +56,8 @@ export function ControllerOverlay({
         if (!body && (!file.overlay_width || !file.overlay_height)) {
           throw new Error(`Preset '${preset.id}' has no body layer.`);
         }
+
+        validateOverlayPresetElements(preset.id, file.elements);
 
         setLoadedPreset({
           ...preset,

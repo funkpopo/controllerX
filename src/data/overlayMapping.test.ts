@@ -5,7 +5,8 @@ import {
   dpadAxisY,
   getElementRenderState,
   shouldRenderElement,
-  triggerValue
+  triggerValue,
+  validateOverlayPresetElements
 } from "./overlayMapping";
 import type { ControllerSnapshot, OverlayElement } from "../types/controller";
 
@@ -39,6 +40,12 @@ function snapshot(
       dpadDown: 0,
       dpadLeft: 0,
       dpadRight: 0,
+      misc1: 0,
+      paddle1: 0,
+      paddle2: 0,
+      paddle3: 0,
+      paddle4: 0,
+      touchpad: 0,
       ...buttons
     },
     axes: {
@@ -74,6 +81,32 @@ describe("overlay mapping", () => {
     expect(buttonValueByCode(1, controller)).toBe(0.5);
     expect(buttonValueByCode(2, controller)).toBe(0.25);
     expect(buttonValueByCode(3, controller)).toBe(0.75);
+  });
+
+  it("maps SDL stick and PlayStation extension button codes explicitly", () => {
+    const controller = snapshot({
+      leftThumb: 0.6,
+      rightThumb: 0.7,
+      misc1: 0.8,
+      paddle1: 0.1,
+      paddle2: 0.2,
+      paddle3: 0.3,
+      paddle4: 0.4,
+      touchpad: 0.9
+    });
+
+    expect(buttonValueByCode(7, controller)).toBe(0.6);
+    expect(buttonValueByCode(8, controller)).toBe(0.7);
+    expect(buttonValueByCode(15, controller)).toBe(0.8);
+    expect(buttonValueByCode(16, controller)).toBe(0.1);
+    expect(buttonValueByCode(17, controller)).toBe(0.2);
+    expect(buttonValueByCode(18, controller)).toBe(0.3);
+    expect(buttonValueByCode(19, controller)).toBe(0.4);
+    expect(buttonValueByCode(20, controller)).toBe(0.9);
+  });
+
+  it("rejects unsupported input-overlay button codes", () => {
+    expect(() => buttonValueByCode(21, snapshot())).toThrow("21");
   });
 
   it("keeps inactive face button sprites hidden", () => {
@@ -121,5 +154,23 @@ describe("overlay mapping", () => {
 
     expect(shouldRenderElement(element({ type: 0 }), baseState)).toBe(true);
     expect(shouldRenderElement(element({ type: 5 }), stickState)).toBe(true);
+  });
+
+  it("validates supported DualSense extension preset elements", () => {
+    expect(() =>
+      validateOverlayPresetElements("dualsense-test", [
+        element({ id: "Button PS5 Mute", code: 15 }),
+        element({ id: "Button PS5 TouchPad", code: 20 })
+      ])
+    ).not.toThrow();
+  });
+
+  it("rejects unsupported preset element types and mappings", () => {
+    expect(() =>
+      validateOverlayPresetElements("bad-preset", [
+        element({ id: "Unknown Button", code: 99 }),
+        element({ id: "Unknown Element", type: 99 })
+      ])
+    ).toThrow("unsupported");
   });
 });

@@ -8,7 +8,7 @@ use tauri::{AppHandle, Emitter};
 
 use crate::profiles::{
     device_identity, match_profile, profile_by_id, profile_info, DeviceIdentity, ProfileId,
-    ProfileInfo, TriggerAxisMode, UnsupportedDevice,
+    ProfileInfo, RawButtonCode, TriggerAxisMode, UnsupportedDevice,
 };
 use crate::settings::{AppSettings, InputSettings, SimulationScenario};
 
@@ -59,6 +59,12 @@ pub struct ControllerButtons {
     pub dpad_down: f32,
     pub dpad_left: f32,
     pub dpad_right: f32,
+    pub misc1: f32,
+    pub paddle1: f32,
+    pub paddle2: f32,
+    pub paddle3: f32,
+    pub paddle4: f32,
+    pub touchpad: f32,
 }
 
 #[derive(Clone, Debug, Default, Serialize)]
@@ -215,38 +221,48 @@ fn read_controller_state(
     let transform = profile.transform;
 
     let left_stick_x = apply_stick_axis(
-        required_axis_value(gamepad, map.left_stick_x, "left_stick_x")?,
+        required_axis_value(gamepad, map.left_stick_x, "left_stick_x", 0.0)?,
         settings.left_stick_deadzone,
         settings.stick_sensitivity,
         false,
     );
     let left_stick_y = apply_stick_axis(
-        required_axis_value(gamepad, map.left_stick_y, "left_stick_y")?,
+        required_axis_value(gamepad, map.left_stick_y, "left_stick_y", 0.0)?,
         settings.left_stick_deadzone,
         settings.stick_sensitivity,
         settings.invert_left_y ^ transform.invert_left_y,
     );
     let right_stick_x = apply_stick_axis(
-        required_axis_value(gamepad, map.right_stick_x, "right_stick_x")?,
+        required_axis_value(gamepad, map.right_stick_x, "right_stick_x", 0.0)?,
         settings.right_stick_deadzone,
         settings.stick_sensitivity,
         false,
     );
     let right_stick_y = apply_stick_axis(
-        required_axis_value(gamepad, map.right_stick_y, "right_stick_y")?,
+        required_axis_value(gamepad, map.right_stick_y, "right_stick_y", 0.0)?,
         settings.right_stick_deadzone,
         settings.stick_sensitivity,
         settings.invert_right_y ^ transform.invert_right_y,
     );
 
     let left_trigger_axis = apply_trigger_axis(
-        required_axis_value(gamepad, map.left_trigger_axis, "left_trigger_axis")?,
+        required_axis_value(
+            gamepad,
+            map.left_trigger_axis,
+            "left_trigger_axis",
+            trigger_rest_value(transform.left_trigger_axis_mode),
+        )?,
         transform.left_trigger_axis_mode,
         settings.trigger_deadzone,
         settings.trigger_sensitivity,
     );
     let right_trigger_axis = apply_trigger_axis(
-        required_axis_value(gamepad, map.right_trigger_axis, "right_trigger_axis")?,
+        required_axis_value(
+            gamepad,
+            map.right_trigger_axis,
+            "right_trigger_axis",
+            trigger_rest_value(transform.right_trigger_axis_mode),
+        )?,
         transform.right_trigger_axis_mode,
         settings.trigger_deadzone,
         settings.trigger_sensitivity,
@@ -269,6 +285,7 @@ fn read_controller_state(
         ),
         None => 0.0,
     };
+    let extra_buttons = map.extra_buttons;
 
     Ok((
         ControllerButtons {
@@ -289,6 +306,12 @@ fn read_controller_state(
             dpad_down: required_button_value(gamepad, map.dpad_down, "dpad_down")?,
             dpad_left: required_button_value(gamepad, map.dpad_left, "dpad_left")?,
             dpad_right: required_button_value(gamepad, map.dpad_right, "dpad_right")?,
+            misc1: optional_raw_button_value(gamepad, extra_buttons.misc1),
+            paddle1: optional_raw_button_value(gamepad, extra_buttons.paddle1),
+            paddle2: optional_raw_button_value(gamepad, extra_buttons.paddle2),
+            paddle3: optional_raw_button_value(gamepad, extra_buttons.paddle3),
+            paddle4: optional_raw_button_value(gamepad, extra_buttons.paddle4),
+            touchpad: optional_raw_button_value(gamepad, extra_buttons.touchpad),
         },
         ControllerAxes {
             left_stick_x,
@@ -375,9 +398,10 @@ fn build_simulated_snapshot(settings: &AppSettings, updated_at_ms: u128) -> Cont
             buttons.dpad_right = pulsed(seconds, 2.45);
             buttons.dpad_down = pulsed(seconds, 2.8);
             buttons.dpad_left = pulsed(seconds, 3.15);
+            apply_simulated_extra_buttons(profile.id, seconds, &mut buttons);
         }
         SimulationScenario::Buttons => {
-            let slot = ((seconds * 3.0) as u32) % 12;
+            let slot = ((seconds * 3.0) as u32) % simulated_button_slot_count(profile.id);
             match slot {
                 0 => buttons.south = 1.0,
                 1 => buttons.east = 1.0,
@@ -390,6 +414,9 @@ fn build_simulated_snapshot(settings: &AppSettings, updated_at_ms: u128) -> Cont
                 8 => buttons.left_thumb = 1.0,
                 9 => buttons.right_thumb = 1.0,
                 10 => buttons.mode = 1.0,
+                11 => buttons.dpad_up = 1.0,
+                12 => buttons.touchpad = 1.0,
+                13 => buttons.misc1 = 1.0,
                 _ => buttons.dpad_up = 1.0,
             }
         }
@@ -409,6 +436,7 @@ fn build_simulated_snapshot(settings: &AppSettings, updated_at_ms: u128) -> Cont
             buttons.south = pulsed(seconds, 0.0);
             buttons.start = pulsed(seconds, 1.1);
             buttons.dpad_right = pulsed(seconds, 2.2);
+            apply_simulated_extra_buttons(profile.id, seconds, &mut buttons);
         }
     }
 
@@ -476,12 +504,15 @@ fn required_button_value(
     button: Button,
     logical_name: &str,
 ) -> Result<f32, String> {
-    gamepad
-        .button_data(button)
+    let code = gamepad.button_code(button).ok_or_else(|| {
+        format!("Mapped button '{logical_name}' is not exposed by gilrs as {button:?}.")
+    })?;
+
+    Ok(gamepad
+        .state()
+        .button_data(code)
         .map(|button| button.value().clamp(0.0, 1.0))
-        .ok_or_else(|| {
-            format!("Mapped button '{logical_name}' is not exposed by gilrs as {button:?}.")
-        })
+        .unwrap_or(0.0))
 }
 
 fn optional_button_value(
@@ -499,11 +530,17 @@ fn required_axis_value(
     gamepad: &Gamepad<'_>,
     axis: Axis,
     logical_name: &str,
+    default_value: f32,
 ) -> Result<f32, String> {
-    gamepad
-        .axis_data(axis)
+    let code = gamepad.axis_code(axis).ok_or_else(|| {
+        format!("Mapped axis '{logical_name}' is not exposed by gilrs as {axis:?}.")
+    })?;
+
+    Ok(gamepad
+        .state()
+        .axis_data(code)
         .map(|axis| axis.value().clamp(-1.0, 1.0))
-        .ok_or_else(|| format!("Mapped axis '{logical_name}' is not exposed by gilrs as {axis:?}."))
+        .unwrap_or(default_value.clamp(-1.0, 1.0)))
 }
 
 fn optional_axis_value(
@@ -512,9 +549,22 @@ fn optional_axis_value(
     logical_name: &str,
 ) -> Result<Option<f32>, String> {
     match axis {
-        Some(axis) => required_axis_value(gamepad, axis, logical_name).map(Some),
+        Some(axis) => required_axis_value(gamepad, axis, logical_name, 0.0).map(Some),
         None => Ok(None),
     }
+}
+
+fn optional_raw_button_value(gamepad: &Gamepad<'_>, raw_code: Option<RawButtonCode>) -> f32 {
+    let Some(raw_code) = raw_code else {
+        return 0.0;
+    };
+
+    gamepad
+        .state()
+        .buttons()
+        .find(|(code, _)| code.into_u32() == raw_code.packed_gilrs_code)
+        .map(|(_, button)| button.value().clamp(0.0, 1.0))
+        .unwrap_or(0.0)
 }
 
 fn apply_stick_axis(value: f32, deadzone: f32, sensitivity: f32, invert: bool) -> f32 {
@@ -548,6 +598,13 @@ fn apply_trigger_axis(value: f32, mode: TriggerAxisMode, deadzone: f32, sensitiv
     }
 }
 
+fn trigger_rest_value(mode: TriggerAxisMode) -> f32 {
+    match mode {
+        TriggerAxisMode::PositiveZeroToOne => 0.0,
+        TriggerAxisMode::SignedMinusOneToOne => -1.0,
+    }
+}
+
 fn positive_wave(seconds: f32, speed: f32) -> f32 {
     ((seconds * std::f32::consts::TAU * speed).sin() * 0.5 + 0.5).clamp(0.0, 1.0)
 }
@@ -557,6 +614,31 @@ fn pulsed(seconds: f32, offset: f32) -> f32 {
         1.0
     } else {
         0.0
+    }
+}
+
+fn simulated_button_slot_count(profile_id: ProfileId) -> u32 {
+    match profile_id {
+        ProfileId::DualSense => 14,
+        ProfileId::DualShock4 => 13,
+        _ => 12,
+    }
+}
+
+fn apply_simulated_extra_buttons(
+    profile_id: ProfileId,
+    seconds: f32,
+    buttons: &mut ControllerButtons,
+) {
+    match profile_id {
+        ProfileId::DualSense => {
+            buttons.touchpad = buttons.touchpad.max(pulsed(seconds, 3.5));
+            buttons.misc1 = buttons.misc1.max(pulsed(seconds, 3.85));
+        }
+        ProfileId::DualShock4 => {
+            buttons.touchpad = buttons.touchpad.max(pulsed(seconds, 3.5));
+        }
+        _ => {}
     }
 }
 

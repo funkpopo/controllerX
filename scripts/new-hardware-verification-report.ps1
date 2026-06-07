@@ -35,9 +35,54 @@ $ProjectRoot = (Resolve-Path (Join-Path $ScriptDir "..")).Path
 $ReportDir = Join-Path $ProjectRoot "verification-reports"
 New-Item -ItemType Directory -Path $ReportDir -Force | Out-Null
 
+function Get-ProfileButtonLines {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ProfileId
+    )
+
+    switch ($ProfileId) {
+        "dualsense" {
+            return @(
+                "- [ ] DualSense Mute / misc1",
+                "- [ ] DualSense TouchPad click"
+            )
+        }
+        "dualshock-4" {
+            return @(
+                "- [ ] DualShock 4 TouchPad click"
+            )
+        }
+        default {
+            return @()
+        }
+    }
+}
+
+function Get-ProfileVisualGuardrail {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ProfileId
+    )
+
+    if ($ProfileId -eq "dualshock-4") {
+        return "- DualShock 4 must show ``Profile has no visual preset`` until a DualShock 4 PNG/JSON preset is sourced from ``input-overlay``."
+    }
+
+    return "- The selected controller image must match the sourced ``input-overlay`` preset for this profile."
+}
+
 $timestamp = Get-Date -Format "yyyyMMdd-HHmmss"
 $safeName = ($DeviceName -replace "[^a-zA-Z0-9._-]+", "-").Trim("-")
 $reportPath = Join-Path $ReportDir "$timestamp-$ProfileId-$Connection-$VendorId-$ProductId-$safeName.md"
+$profileButtonLines = @(Get-ProfileButtonLines -ProfileId $ProfileId)
+$profileButtonContent = if ($profileButtonLines.Count -gt 0) {
+    ($profileButtonLines -join "`n") + "`n"
+}
+else {
+    ""
+}
+$profileVisualGuardrail = Get-ProfileVisualGuardrail -ProfileId $ProfileId
 
 $content = @"
 # Hardware Verification Report
@@ -60,6 +105,7 @@ Created: $(Get-Date -Format o)
 - Auto profile selects ``$ProfileId``.
 - Unsupported state is shown only when the connected hardware does not expose a required mapped input.
 - No other controller image is used as a visual replacement.
+$profileVisualGuardrail
 
 ## Hot-Plug
 
@@ -87,7 +133,7 @@ Created: $(Get-Date -Format o)
 - [ ] D-Pad down
 - [ ] D-Pad left
 - [ ] D-Pad right
-- Notes:
+$($profileButtonContent)- Notes:
 
 ## Axes
 
@@ -123,4 +169,4 @@ Created: $(Get-Date -Format o)
     $content,
     [System.Text.UTF8Encoding]::new($false)
 )
-Write-Host $reportPath
+Write-Output $reportPath

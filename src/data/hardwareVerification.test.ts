@@ -8,6 +8,7 @@ import {
   hasRealConnectEvent,
   hasRealDisconnectEvent,
   isAxisRequirementCovered,
+  requiredButtonInputs,
   summarizeCoverage,
   updateInputCoverage,
   type HardwareReportInput
@@ -31,7 +32,13 @@ const emptyButtons = {
   dpadUp: 0,
   dpadDown: 0,
   dpadLeft: 0,
-  dpadRight: 0
+  dpadRight: 0,
+  misc1: 0,
+  paddle1: 0,
+  paddle2: 0,
+  paddle3: 0,
+  paddle4: 0,
+  touchpad: 0
 };
 
 const emptyAxes = {
@@ -181,6 +188,22 @@ describe("hardware verification coverage", () => {
     expect(hasRealConnectEvent(events)).toBe(true);
     expect(hasRealDisconnectEvent(events)).toBe(true);
   });
+
+  it("uses profile-specific required button coverage", () => {
+    const coverage = createEmptyInputCoverage();
+
+    for (const button of requiredButtonInputs("dualsense")) {
+      coverage.buttons[button.key] = true;
+    }
+    coverage.buttons.touchpad = false;
+
+    const xboxSummary = summarizeCoverage(coverage, "xbox-series");
+    const dualSenseSummary = summarizeCoverage(coverage, "dualsense");
+
+    expect(xboxSummary.buttonCovered).toBe(xboxSummary.buttonTotal);
+    expect(dualSenseSummary.buttonTotal).toBe(xboxSummary.buttonTotal + 2);
+    expect(dualSenseSummary.buttonCovered).toBe(dualSenseSummary.buttonTotal - 1);
+  });
 });
 
 describe("hardware verification reports", () => {
@@ -209,5 +232,16 @@ describe("hardware verification reports", () => {
     expect(report).toContain("Simulation observed during session: yes");
     expect(report).toContain("Simulated input is not counted as hardware verification evidence.");
     expect(report).toContain("Status: Incomplete evidence");
+  });
+
+  it("lists required and optional button fields separately", () => {
+    const report = buildHardwareVerificationReport(reportInput());
+
+    expect(report).toContain("## Buttons");
+    expect(report).toContain("- [ ] Misc 1 / DualSense mute");
+    expect(report).toContain("- [ ] Touchpad button");
+    expect(report).toContain("## Optional Button Fields");
+    expect(report).toContain("- [ ] Paddle 4");
+    expect(report).toContain("Button coverage: 0/17");
   });
 });

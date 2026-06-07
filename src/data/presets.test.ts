@@ -19,7 +19,13 @@ const emptyButtons = {
   dpadUp: 0,
   dpadDown: 0,
   dpadLeft: 0,
-  dpadRight: 0
+  dpadRight: 0,
+  misc1: 0,
+  paddle1: 0,
+  paddle2: 0,
+  paddle3: 0,
+  paddle4: 0,
+  touchpad: 0
 };
 
 const emptyAxes = {

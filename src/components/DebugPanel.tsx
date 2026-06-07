@@ -31,7 +31,13 @@ export function DebugPanel({ controller, deviceEvents }: DebugPanelProps) {
           up: controller.buttons.dpadUp,
           down: controller.buttons.dpadDown,
           left: controller.buttons.dpadLeft,
-          right: controller.buttons.dpadRight
+          right: controller.buttons.dpadRight,
+          misc1: controller.buttons.misc1,
+          p1: controller.buttons.paddle1,
+          p2: controller.buttons.paddle2,
+          p3: controller.buttons.paddle3,
+          p4: controller.buttons.paddle4,
+          touch: controller.buttons.touchpad
         }}
       />
       <ValueGrid

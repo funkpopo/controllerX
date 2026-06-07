@@ -103,6 +103,22 @@ pub struct InputMap {
     pub right_trigger_axis: Axis,
     pub dpad_x: Option<Axis>,
     pub dpad_y: Option<Axis>,
+    pub extra_buttons: ExtraButtonMap,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct ExtraButtonMap {
+    pub misc1: Option<RawButtonCode>,
+    pub paddle1: Option<RawButtonCode>,
+    pub paddle2: Option<RawButtonCode>,
+    pub paddle3: Option<RawButtonCode>,
+    pub paddle4: Option<RawButtonCode>,
+    pub touchpad: Option<RawButtonCode>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RawButtonCode {
+    pub packed_gilrs_code: u32,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -183,6 +199,43 @@ const STANDARD_MAP: InputMap = InputMap {
     right_trigger_axis: Axis::RightZ,
     dpad_x: None,
     dpad_y: None,
+    extra_buttons: NO_EXTRA_BUTTONS,
+};
+
+const NO_EXTRA_BUTTONS: ExtraButtonMap = ExtraButtonMap {
+    misc1: None,
+    paddle1: None,
+    paddle2: None,
+    paddle3: None,
+    paddle4: None,
+    touchpad: None,
+};
+
+const DUALSHOCK4_EXTRA_BUTTONS: ExtraButtonMap = ExtraButtonMap {
+    touchpad: Some(RawButtonCode {
+        packed_gilrs_code: 13,
+    }),
+    ..NO_EXTRA_BUTTONS
+};
+
+const DUALSENSE_EXTRA_BUTTONS: ExtraButtonMap = ExtraButtonMap {
+    misc1: Some(RawButtonCode {
+        packed_gilrs_code: 14,
+    }),
+    touchpad: Some(RawButtonCode {
+        packed_gilrs_code: 13,
+    }),
+    ..NO_EXTRA_BUTTONS
+};
+
+const DUALSHOCK4_MAP: InputMap = InputMap {
+    extra_buttons: DUALSHOCK4_EXTRA_BUTTONS,
+    ..STANDARD_MAP
+};
+
+const DUALSENSE_MAP: InputMap = InputMap {
+    extra_buttons: DUALSENSE_EXTRA_BUTTONS,
+    ..STANDARD_MAP
 };
 
 const STANDARD_TRANSFORM: ProfileTransform = ProfileTransform {
@@ -260,7 +313,7 @@ pub const PROFILE_CATALOG: [ControllerProfile; 7] = [
         family: ControllerFamily::PlayStation,
         preset_id: None,
         match_kind: DeviceMatchKind::VendorProduct,
-        input_map: STANDARD_MAP,
+        input_map: DUALSHOCK4_MAP,
         transform: STANDARD_TRANSFORM,
         calibration_status: NEEDS_DS4_ASSET,
     },
@@ -270,7 +323,7 @@ pub const PROFILE_CATALOG: [ControllerProfile; 7] = [
         family: ControllerFamily::PlayStation,
         preset_id: Some("dualsense"),
         match_kind: DeviceMatchKind::VendorProduct,
-        input_map: STANDARD_MAP,
+        input_map: DUALSENSE_MAP,
         transform: STANDARD_TRANSFORM,
         calibration_status: CALIBRATED_WITH_INCLUDED_PRESET,
     },
@@ -361,35 +414,35 @@ const VENDOR_PRODUCT_PROFILES: [VendorProductProfile; 15] = [
         vendor_id: 0x054c,
         product_id: 0x05c4,
         profile_id: ProfileId::DualShock4,
-        input_map: STANDARD_MAP,
+        input_map: DUALSHOCK4_MAP,
         transform: STANDARD_TRANSFORM,
     },
     VendorProductProfile {
         vendor_id: 0x054c,
         product_id: 0x09cc,
         profile_id: ProfileId::DualShock4,
-        input_map: STANDARD_MAP,
+        input_map: DUALSHOCK4_MAP,
         transform: STANDARD_TRANSFORM,
     },
     VendorProductProfile {
         vendor_id: 0x054c,
         product_id: 0x0ba0,
         profile_id: ProfileId::DualShock4,
-        input_map: STANDARD_MAP,
+        input_map: DUALSHOCK4_MAP,
         transform: STANDARD_TRANSFORM,
     },
     VendorProductProfile {
         vendor_id: 0x054c,
         product_id: 0x0ce6,
         profile_id: ProfileId::DualSense,
-        input_map: STANDARD_MAP,
+        input_map: DUALSENSE_MAP,
         transform: STANDARD_TRANSFORM,
     },
     VendorProductProfile {
         vendor_id: 0x054c,
         product_id: 0x0df2,
         profile_id: ProfileId::DualSense,
-        input_map: STANDARD_MAP,
+        input_map: DUALSENSE_MAP,
         transform: STANDARD_TRANSFORM,
     },
 ];
@@ -508,6 +561,37 @@ mod tests {
     fn matches_dualsense_by_vendor_product() {
         let profile = match_profile(&identity(Some(0x054c), Some(0x0ce6), "Controller")).unwrap();
         assert_eq!(profile.id, ProfileId::DualSense);
+        assert_eq!(
+            profile
+                .input_map
+                .extra_buttons
+                .misc1
+                .map(|code| code.packed_gilrs_code),
+            Some(14)
+        );
+        assert_eq!(
+            profile
+                .input_map
+                .extra_buttons
+                .touchpad
+                .map(|code| code.packed_gilrs_code),
+            Some(13)
+        );
+    }
+
+    #[test]
+    fn matches_dualshock4_touchpad_raw_button_code() {
+        let profile = match_profile(&identity(Some(0x054c), Some(0x09cc), "Controller")).unwrap();
+        assert_eq!(profile.id, ProfileId::DualShock4);
+        assert_eq!(
+            profile
+                .input_map
+                .extra_buttons
+                .touchpad
+                .map(|code| code.packed_gilrs_code),
+            Some(13)
+        );
+        assert!(profile.input_map.extra_buttons.misc1.is_none());
     }
 
     #[test]

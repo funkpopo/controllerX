@@ -7,15 +7,15 @@ import type {
   ProfileInfo
 } from "../types/controller";
 
-export const BUTTON_INPUTS = [
+export type ButtonInput = { key: keyof ControllerButtons; label: string };
+
+export const STANDARD_BUTTON_INPUTS = [
   { key: "south", label: "South" },
   { key: "east", label: "East" },
   { key: "west", label: "West" },
   { key: "north", label: "North" },
   { key: "leftBumper", label: "Left bumper" },
   { key: "rightBumper", label: "Right bumper" },
-  { key: "leftTriggerButton", label: "Left trigger button" },
-  { key: "rightTriggerButton", label: "Right trigger button" },
   { key: "select", label: "Select / Share / Back" },
   { key: "start", label: "Start / Options / Menu" },
   { key: "mode", label: "Mode / Guide / PS" },
@@ -25,7 +25,23 @@ export const BUTTON_INPUTS = [
   { key: "dpadDown", label: "D-Pad down" },
   { key: "dpadLeft", label: "D-Pad left" },
   { key: "dpadRight", label: "D-Pad right" }
-] as const satisfies ReadonlyArray<{ key: keyof ControllerButtons; label: string }>;
+] as const satisfies ReadonlyArray<ButtonInput>;
+
+export const OPTIONAL_BUTTON_INPUTS = [
+  { key: "leftTriggerButton", label: "Left trigger button" },
+  { key: "rightTriggerButton", label: "Right trigger button" },
+  { key: "misc1", label: "Misc 1 / DualSense mute" },
+  { key: "paddle1", label: "Paddle 1" },
+  { key: "paddle2", label: "Paddle 2" },
+  { key: "paddle3", label: "Paddle 3" },
+  { key: "paddle4", label: "Paddle 4" },
+  { key: "touchpad", label: "Touchpad button" }
+] as const satisfies ReadonlyArray<ButtonInput>;
+
+export const BUTTON_INPUTS = [
+  ...STANDARD_BUTTON_INPUTS,
+  ...OPTIONAL_BUTTON_INPUTS
+] as const satisfies ReadonlyArray<ButtonInput>;
 
 export const AXIS_KEYS = [
   "leftStickX",
@@ -286,15 +302,34 @@ export function isAxisRequirementCovered(
   return axis.max >= requirement.threshold && axis.partialSamples >= 2;
 }
 
-export function summarizeCoverage(coverage: InputCoverage) {
-  const buttonCovered = BUTTON_INPUTS.filter((button) => coverage.buttons[button.key]).length;
+export function requiredButtonInputs(profileId: string): ReadonlyArray<ButtonInput> {
+  if (profileId === "dualsense") {
+    return [
+      ...STANDARD_BUTTON_INPUTS,
+      buttonInput("misc1"),
+      buttonInput("touchpad")
+    ];
+  }
+
+  if (profileId === "dualshock-4") {
+    return [...STANDARD_BUTTON_INPUTS, buttonInput("touchpad")];
+  }
+
+  return STANDARD_BUTTON_INPUTS;
+}
+
+export function summarizeCoverage(coverage: InputCoverage, profileId = "") {
+  const requiredButtons = requiredButtonInputs(profileId);
+  const buttonCovered = requiredButtons.filter(
+    (button) => coverage.buttons[button.key]
+  ).length;
   const axisCovered = AXIS_REQUIREMENTS.filter((requirement) =>
     isAxisRequirementCovered(requirement, coverage.axes)
   ).length;
 
   return {
     buttonCovered,
-    buttonTotal: BUTTON_INPUTS.length,
+    buttonTotal: requiredButtons.length,
     axisCovered,
     axisTotal: AXIS_REQUIREMENTS.length
   };
@@ -343,11 +378,11 @@ export function buildReportFileName(input: HardwareReportInput) {
 }
 
 export function buildHardwareVerificationReport(input: HardwareReportInput) {
-  const coverage = summarizeCoverage(input.coverage);
   const observation = input.observation;
   const expectedProfile = input.expectedProfileId || "not-selected";
   const observedProfile =
     observation?.profile?.id ?? input.latestController.profile?.id ?? "not-detected";
+  const coverage = summarizeCoverage(input.coverage, expectedProfile);
   const profileMatched =
     input.expectedProfileId.length > 0 && observedProfile === input.expectedProfileId;
   const realConnect = hasRealConnectEvent(input.deviceEvents);
@@ -401,7 +436,13 @@ export function buildHardwareVerificationReport(input: HardwareReportInput) {
     "",
     "## Buttons",
     "",
-    ...BUTTON_INPUTS.map((button) =>
+    ...requiredButtonInputs(expectedProfile).map((button) =>
+      checkboxLine(input.coverage.buttons[button.key], button.label)
+    ),
+    "",
+    "## Optional Button Fields",
+    "",
+    ...OPTIONAL_BUTTON_INPUTS.map((button) =>
       checkboxLine(input.coverage.buttons[button.key], button.label)
     ),
     "",
@@ -456,6 +497,15 @@ export function buildHardwareVerificationReport(input: HardwareReportInput) {
 
 function checkboxLine(checked: boolean, label: string) {
   return `- [${checked ? "x" : " "}] ${label}`;
+}
+
+function buttonInput(key: keyof ControllerButtons) {
+  const input = BUTTON_INPUTS.find((button) => button.key === key);
+  if (!input) {
+    throw new Error(`Button input '${key}' is not registered.`);
+  }
+
+  return input;
 }
 
 function compactTimestamp(value: number) {
