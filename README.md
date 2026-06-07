@@ -2,7 +2,7 @@
 
 controllerX is a transparent desktop gamepad overlay for Xbox and PlayStation controllers.
 
-The app is a Tauri 2 desktop shell with a React/TypeScript renderer and a Rust `gilrs` input layer. It renders controller bodies and overlay sprites from copied `input-overlay` PNG/JSON presets. Runtime controller polling, profile matching, settings, tray handling, and rendering logic are implemented independently.
+The app is a Tauri 2 desktop shell with a React/TypeScript renderer, a Rust `gilrs` input layer, and a Windows XInput API state source for verified XInput controllers. It renders controller bodies and overlay sprites from copied `input-overlay` PNG/JSON presets. Runtime controller polling, profile matching, settings, tray handling, and rendering logic are implemented independently.
 
 ## Implemented Scope
 
@@ -12,6 +12,8 @@ The app is a Tauri 2 desktop shell with a React/TypeScript renderer and a Rust `
 - Explicit controller profiles for Xbox 360, Xbox One, Xbox Series, DualShock 3, DualShock 4, DualSense, and generic XInput-compatible devices.
 - Explicit DualSense Mute/TouchPad and DualShock 4 TouchPad fields from SDL/input-overlay button semantics for rendering and verification.
 - Explicit VID/PID matching table with per-device override slots for USB/Bluetooth variants.
+- Windows XInput/XUSB driver evidence detection for third-party XInput-compatible controllers whose device names do not contain `XInput`.
+- Windows XInput API polling for XInput controllers so the transparent overlay can keep updating while the window is not focused or click-through is enabled.
 - Unsupported-device and missing-required-input states are reported directly; the UI does not substitute another controller image.
 - Strict preset validation rejects unsupported input-overlay element types and button codes before rendering.
 - Simulation mode for UI testing without hardware, including explicit hot-plug and PlayStation extension-button scenarios.

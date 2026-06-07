@@ -77,7 +77,9 @@ function snapshot(overrides: Partial<ControllerSnapshot> = {}): ControllerSnapsh
       name: "DualSense Wireless Controller",
       vendorId: 0x054c,
       productId: 0x0ce6,
-      uuid: "test"
+      uuid: "test",
+      xinputDriver: null,
+      xinput: null
     },
     profile,
     unsupported: null,
@@ -243,5 +245,98 @@ describe("hardware verification reports", () => {
     expect(report).toContain("## Optional Button Fields");
     expect(report).toContain("- [ ] Paddle 4");
     expect(report).toContain("Button coverage: 0/17");
+  });
+
+  it("records verified XInput driver evidence when present", () => {
+    const xinputSnapshot = snapshot({
+      profile: {
+        ...profile,
+        id: "generic-xinput",
+        displayName: "Generic XInput-compatible Controller",
+        family: "xInput",
+        presetId: "xbox-controller",
+        matchKind: "xInputDriver"
+      },
+      device: {
+        id: "test",
+        name: "Third-party XInput controller",
+        vendorId: 0x413d,
+        productId: 0x2104,
+        uuid: "test",
+        xinputDriver: {
+          source: "windows-pnp",
+          deviceInstanceId: "USB\\VID_413D&PID_2104&MI_00\\TEST",
+          className: "XnaComposite",
+          service: "xusb22",
+          compatibleIds: ["USB\\MS_COMP_XUSB10"]
+        },
+        xinput: null
+      }
+    });
+
+    const report = buildHardwareVerificationReport(
+      reportInput({
+        expectedProfileId: "generic-xinput",
+        observation: {
+          device: xinputSnapshot.device,
+          profile: xinputSnapshot.profile,
+          name: xinputSnapshot.name,
+          firstSeenAtMs: Date.UTC(2026, 5, 7, 5, 0, 3),
+          lastSeenAtMs: Date.UTC(2026, 5, 7, 5, 0, 58)
+        },
+        latestController: xinputSnapshot
+      })
+    );
+
+    expect(report).toContain("XInput driver evidence");
+    expect(report).toContain("windows-pnp, XnaComposite, xusb22, USB\\MS_COMP_XUSB10");
+  });
+
+  it("records Windows XInput API state source when present", () => {
+    const xinputApiSnapshot = snapshot({
+      profile: {
+        ...profile,
+        id: "generic-xinput",
+        displayName: "Generic XInput-compatible Controller",
+        family: "xInput",
+        presetId: "xbox-controller",
+        matchKind: "xInputApi"
+      },
+      device: {
+        id: "windows-xinput-0",
+        name: "Windows XInput Controller 1",
+        vendorId: null,
+        productId: null,
+        uuid: "windows-xinput-0",
+        xinputDriver: {
+          source: "windows-xinput-api",
+          deviceInstanceId: "XInput user index 0",
+          className: null,
+          service: "xinput1_4",
+          compatibleIds: []
+        },
+        xinput: {
+          slot: 0,
+          packetNumber: 42
+        }
+      }
+    });
+
+    const report = buildHardwareVerificationReport(
+      reportInput({
+        expectedProfileId: "generic-xinput",
+        observation: {
+          device: xinputApiSnapshot.device,
+          profile: xinputApiSnapshot.profile,
+          name: xinputApiSnapshot.name,
+          firstSeenAtMs: Date.UTC(2026, 5, 7, 5, 0, 3),
+          lastSeenAtMs: Date.UTC(2026, 5, 7, 5, 0, 58)
+        },
+        latestController: xinputApiSnapshot
+      })
+    );
+
+    expect(report).toContain("XInput API state: `slot 1, packet 42`");
+    expect(report).toContain("windows-xinput-api, xinput1_4");
   });
 });

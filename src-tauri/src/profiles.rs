@@ -1,6 +1,9 @@
 use gilrs::{Axis, Button, Gamepad};
 use serde::Serialize;
 
+use crate::platform_identity;
+use crate::xinput::XInputDevice;
+
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub enum ControllerFamily {
@@ -53,6 +56,8 @@ impl ProfileId {
 pub enum DeviceMatchKind {
     VendorProduct,
     XInputName,
+    XInputDriver,
+    XInputApi,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -99,8 +104,8 @@ pub struct InputMap {
     pub left_stick_y: Axis,
     pub right_stick_x: Axis,
     pub right_stick_y: Axis,
-    pub left_trigger_axis: Axis,
-    pub right_trigger_axis: Axis,
+    pub left_trigger_axis: Option<Axis>,
+    pub right_trigger_axis: Option<Axis>,
     pub dpad_x: Option<Axis>,
     pub dpad_y: Option<Axis>,
     pub extra_buttons: ExtraButtonMap,
@@ -153,6 +158,18 @@ pub struct DeviceIdentity {
     pub vendor_id: Option<u16>,
     pub product_id: Option<u16>,
     pub uuid: String,
+    pub xinput_driver: Option<XInputDriverEvidence>,
+    pub xinput: Option<XInputDevice>,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct XInputDriverEvidence {
+    pub source: String,
+    pub device_instance_id: String,
+    pub class_name: Option<String>,
+    pub service: Option<String>,
+    pub compatible_ids: Vec<String>,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -180,8 +197,8 @@ const STANDARD_MAP: InputMap = InputMap {
     north: Button::North,
     left_bumper: Button::LeftTrigger,
     right_bumper: Button::RightTrigger,
-    left_trigger_button: None,
-    right_trigger_button: None,
+    left_trigger_button: Some(Button::LeftTrigger2),
+    right_trigger_button: Some(Button::RightTrigger2),
     select: Button::Select,
     start: Button::Start,
     mode: Button::Mode,
@@ -195,8 +212,8 @@ const STANDARD_MAP: InputMap = InputMap {
     left_stick_y: Axis::LeftStickY,
     right_stick_x: Axis::RightStickX,
     right_stick_y: Axis::RightStickY,
-    left_trigger_axis: Axis::LeftZ,
-    right_trigger_axis: Axis::RightZ,
+    left_trigger_axis: Some(Axis::LeftZ),
+    right_trigger_axis: Some(Axis::RightZ),
     dpad_x: None,
     dpad_y: None,
     extra_buttons: NO_EXTRA_BUTTONS,
@@ -458,9 +475,23 @@ pub fn match_profile(identity: &DeviceIdentity) -> Result<ControllerProfile, Uns
         }
     }
 
+    if identity.xinput.is_some() {
+        return profile_by_id_with_match_kind(ProfileId::GenericXInput, DeviceMatchKind::XInputApi);
+    }
+
     let normalized_name = identity.name.to_lowercase();
     if normalized_name.contains("xinput") {
-        return profile_by_id(ProfileId::GenericXInput);
+        return profile_by_id_with_match_kind(
+            ProfileId::GenericXInput,
+            DeviceMatchKind::XInputName,
+        );
+    }
+
+    if identity.xinput_driver.is_some() {
+        return profile_by_id_with_match_kind(
+            ProfileId::GenericXInput,
+            DeviceMatchKind::XInputDriver,
+        );
     }
 
     Err(UnsupportedDevice {
@@ -482,6 +513,8 @@ pub fn profile_by_id(profile_id: ProfileId) -> Result<ControllerProfile, Unsuppo
                 vendor_id: None,
                 product_id: None,
                 uuid: String::new(),
+                xinput_driver: None,
+                xinput: None,
             },
         })
 }
@@ -504,7 +537,23 @@ pub fn device_identity(id: impl ToString, gamepad: &Gamepad<'_>) -> DeviceIdenti
         vendor_id: gamepad.vendor_id(),
         product_id: gamepad.product_id(),
         uuid: format_uuid(gamepad.uuid()),
+        xinput_driver: match (gamepad.vendor_id(), gamepad.product_id()) {
+            (Some(vendor_id), Some(product_id)) => {
+                platform_identity::xinput_driver_evidence(vendor_id, product_id)
+            }
+            _ => None,
+        },
+        xinput: None,
     }
+}
+
+fn profile_by_id_with_match_kind(
+    profile_id: ProfileId,
+    match_kind: DeviceMatchKind,
+) -> Result<ControllerProfile, UnsupportedDevice> {
+    let mut profile = profile_by_id(profile_id)?;
+    profile.match_kind = match_kind;
+    Ok(profile)
 }
 
 fn match_vendor_product(vendor_id: u16, product_id: u16) -> Option<ControllerProfile> {
@@ -513,6 +562,7 @@ fn match_vendor_product(vendor_id: u16, product_id: u16) -> Option<ControllerPro
         .find(|variant| variant.vendor_id == vendor_id && variant.product_id == product_id)
         .and_then(|variant| {
             let mut profile = profile_by_id(variant.profile_id).ok()?;
+            profile.match_kind = DeviceMatchKind::VendorProduct;
             profile.input_map = variant.input_map;
             profile.transform = variant.transform;
             Some(profile)
@@ -522,9 +572,9 @@ fn match_vendor_product(vendor_id: u16, product_id: u16) -> Option<ControllerPro
 fn unsupported_reason(identity: &DeviceIdentity) -> String {
     match (identity.vendor_id, identity.product_id) {
         (Some(vendor), Some(product)) => format!(
-            "No explicit controller profile for vendor 0x{vendor:04x}, product 0x{product:04x}."
+            "No explicit controller profile for vendor 0x{vendor:04x}, product 0x{product:04x}, and no verified XInput/XUSB driver evidence was found."
         ),
-        _ => "No vendor/product ID was exposed and no explicit XInput name match was found."
+        _ => "No vendor/product ID was exposed and no explicit XInput name or XInput/XUSB driver evidence was found."
             .to_string(),
     }
 }
@@ -548,6 +598,25 @@ mod tests {
             vendor_id,
             product_id,
             uuid: "test".to_string(),
+            xinput_driver: None,
+            xinput: None,
+        }
+    }
+
+    fn identity_with_xinput_driver(
+        vendor_id: Option<u16>,
+        product_id: Option<u16>,
+        name: &str,
+    ) -> DeviceIdentity {
+        DeviceIdentity {
+            xinput_driver: Some(XInputDriverEvidence {
+                source: "windows-pnp".to_string(),
+                device_instance_id: "USB\\VID_413D&PID_2104&MI_00\\TEST".to_string(),
+                class_name: Some("XnaComposite".to_string()),
+                service: Some("xusb22".to_string()),
+                compatible_ids: vec!["USB\\MS_COMP_XUSB10".to_string()],
+            }),
+            ..identity(vendor_id, product_id, name)
         }
     }
 
@@ -555,6 +624,7 @@ mod tests {
     fn matches_xbox_series_by_vendor_product() {
         let profile = match_profile(&identity(Some(0x045e), Some(0x0b12), "Controller")).unwrap();
         assert_eq!(profile.id, ProfileId::XboxSeries);
+        assert_eq!(profile.match_kind, DeviceMatchKind::VendorProduct);
     }
 
     #[test]
@@ -598,6 +668,19 @@ mod tests {
     fn matches_generic_xinput_by_name_only() {
         let profile = match_profile(&identity(None, None, "XInput Controller")).unwrap();
         assert_eq!(profile.id, ProfileId::GenericXInput);
+        assert_eq!(profile.match_kind, DeviceMatchKind::XInputName);
+    }
+
+    #[test]
+    fn matches_generic_xinput_by_verified_driver_evidence() {
+        let profile = match_profile(&identity_with_xinput_driver(
+            Some(0x413d),
+            Some(0x2104),
+            "Controller",
+        ))
+        .unwrap();
+        assert_eq!(profile.id, ProfileId::GenericXInput);
+        assert_eq!(profile.match_kind, DeviceMatchKind::XInputDriver);
     }
 
     #[test]
@@ -605,5 +688,6 @@ mod tests {
         let error = match_profile(&identity(Some(0x1234), Some(0xabcd), "Unknown")).unwrap_err();
         assert!(error.reason.contains("0x1234"));
         assert!(error.reason.contains("0xabcd"));
+        assert!(error.reason.contains("XInput/XUSB driver evidence"));
     }
 }

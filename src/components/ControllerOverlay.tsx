@@ -1,8 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import {
+  DPAD_DIRECTIONS,
   getElementRenderState,
+  getDpadDirectionRenderState,
+  isElementActive,
   shouldRenderElement,
   validateOverlayPresetElements,
+  type DpadDirection,
   type ElementRenderState
 } from "../data/overlayMapping";
 import type {
@@ -135,14 +139,23 @@ export function ControllerOverlay({
             transform: `scale(${stageScale})`
           }}
         >
-          {elements.map(({ element, renderState }) => (
-            <SpriteLayer
-              key={`${element.id}-${element.type}-${element.mapping.join("-")}`}
-              image={loadedPreset.image}
-              element={element}
-              renderState={renderState}
-            />
-          ))}
+          {elements.map(({ element, renderState }) =>
+            element.type === 8 ? (
+              <DpadSpriteLayers
+                key={`${element.id}-${element.type}-${element.mapping.join("-")}`}
+                image={loadedPreset.image}
+                element={element}
+                controller={controller}
+              />
+            ) : (
+              <SpriteLayer
+                key={`${element.id}-${element.type}-${element.mapping.join("-")}`}
+                image={loadedPreset.image}
+                element={element}
+                renderState={renderState}
+              />
+            )
+          )}
           {debugVisible
             ? elements
                 .filter(({ element }) => element.type !== 0)
@@ -160,14 +173,46 @@ export function ControllerOverlay({
   );
 }
 
+function DpadSpriteLayers({
+  image,
+  element,
+  controller
+}: {
+  image: string;
+  element: OverlayElement;
+  controller: ControllerSnapshot;
+}) {
+  return (
+    <>
+      {DPAD_DIRECTIONS.map((direction) => (
+        <SpriteLayer
+          key={`${element.id}-${direction}`}
+          image={image}
+          element={element}
+          renderState={getDpadDirectionRenderState(direction, controller)}
+          className={`sprite-dpad-${direction}`}
+          clipPath={dpadDirectionClipPath(direction)}
+          dataDirection={direction}
+        />
+      ))}
+    </>
+  );
+}
+
 function SpriteLayer({
   image,
   element,
-  renderState
+  renderState,
+  className,
+  clipPath,
+  dataDirection
 }: {
   image: string;
   element: OverlayElement;
   renderState: ElementRenderState;
+  className?: string;
+  clipPath?: string;
+  dataDirection?: string;
 }) {
   const [sourceX, sourceY, width, height] = element.mapping;
   const [left, top] = element.pos;
@@ -176,18 +221,28 @@ function SpriteLayer({
     return null;
   }
 
+  const active = isElementActive(element, renderState);
   const overlayOpacity =
-    element.type === 0 ? 1 : Math.min(1, 0.26 + renderState.value * 0.74);
-  const clipStyle =
-    renderState.clipRatio === null
-      ? {}
-      : {
-          clipPath: `inset(${Math.max(0, 1 - renderState.clipRatio) * 100}% 0 0 0)`
-        };
+    element.type === 0 ? 1 : Math.min(1, 0.42 + renderState.value * 0.58);
+  const resolvedClipPath =
+    clipPath ??
+    (renderState.clipRatio === null
+      ? null
+      : `inset(${Math.max(0, 1 - renderState.clipRatio) * 100}% 0 0 0)`);
+  const clipStyle = resolvedClipPath === null ? {} : { clipPath: resolvedClipPath };
 
   return (
     <div
-      className={`sprite-layer sprite-type-${element.type}`}
+      className={[
+        "sprite-layer",
+        `sprite-type-${element.type}`,
+        className,
+        active ? "sprite-active" : ""
+      ]
+        .filter(Boolean)
+        .join(" ")}
+      data-active={active ? "true" : "false"}
+      data-direction={dataDirection}
       style={{
         left,
         top,
@@ -201,6 +256,19 @@ function SpriteLayer({
       }}
     />
   );
+}
+
+function dpadDirectionClipPath(direction: DpadDirection) {
+  switch (direction) {
+    case "up":
+      return "inset(0 33% 50% 33%)";
+    case "down":
+      return "inset(50% 33% 0 33%)";
+    case "left":
+      return "inset(33% 50% 33% 0)";
+    case "right":
+      return "inset(33% 0 33% 50%)";
+  }
 }
 
 function DebugLabel({

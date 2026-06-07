@@ -1,8 +1,10 @@
 mod controller;
+mod platform_identity;
 mod profiles;
 mod settings;
 mod verification;
 mod window_control;
+mod xinput;
 
 use std::sync::{Arc, Mutex};
 

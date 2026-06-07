@@ -86,21 +86,27 @@ impl Default for AppSettings {
                     height: 438,
                 },
             },
-            input: InputSettings {
-                left_stick_deadzone: 0.08,
-                right_stick_deadzone: 0.08,
-                trigger_deadzone: 0.02,
-                stick_sensitivity: 1.0,
-                trigger_sensitivity: 1.0,
-                invert_left_y: false,
-                invert_right_y: false,
-                invert_dpad_y: false,
-            },
+            input: InputSettings::default(),
             simulation: SimulationSettings {
                 enabled: false,
                 scenario: SimulationScenario::Sweep,
                 profile_id: "dualsense".to_string(),
             },
+        }
+    }
+}
+
+impl Default for InputSettings {
+    fn default() -> Self {
+        Self {
+            left_stick_deadzone: 0.08,
+            right_stick_deadzone: 0.08,
+            trigger_deadzone: 0.02,
+            stick_sensitivity: 1.0,
+            trigger_sensitivity: 1.0,
+            invert_left_y: false,
+            invert_right_y: false,
+            invert_dpad_y: false,
         }
     }
 }

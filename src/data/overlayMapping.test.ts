@@ -3,12 +3,21 @@ import {
   buttonValueByCode,
   dpadAxisX,
   dpadAxisY,
+  dpadDirectionValue,
   getElementRenderState,
+  getDpadDirectionRenderState,
+  isElementActive,
   shouldRenderElement,
   triggerValue,
   validateOverlayPresetElements
 } from "./overlayMapping";
 import type { ControllerSnapshot, OverlayElement } from "../types/controller";
+import xboxPresetFile from "../../public/vendor/input-overlay/xbox-controller/xbox-controller.json";
+import dualSensePresetFile from "../../public/vendor/input-overlay/dualsense/dualsense.json";
+import type { OverlayPresetFile } from "../types/controller";
+
+const xboxPreset = xboxPresetFile as unknown as OverlayPresetFile;
+const dualSensePreset = dualSensePresetFile as unknown as OverlayPresetFile;
 
 function snapshot(
   buttons: Partial<ControllerSnapshot["buttons"]> = {},
@@ -71,6 +80,32 @@ function element(overrides: Partial<OverlayElement>): OverlayElement {
     mapping: [0, 0, 10, 10],
     ...overrides
   };
+}
+
+function renderableElementIds(
+  preset: OverlayPresetFile,
+  controller: ControllerSnapshot
+) {
+  return preset.elements
+    .filter((presetElement) =>
+      shouldRenderElement(
+        presetElement,
+        getElementRenderState(presetElement, controller)
+      )
+    )
+    .map((presetElement) => presetElement.id);
+}
+
+function presetElement(
+  preset: OverlayPresetFile,
+  predicate: (element: OverlayElement) => boolean
+) {
+  const found = preset.elements.find(predicate);
+  if (!found) {
+    throw new Error("Expected preset element was not found.");
+  }
+
+  return found;
 }
 
 describe("overlay mapping", () => {
@@ -148,12 +183,62 @@ describe("overlay mapping", () => {
     expect(dpadAxisY(controller)).toBeCloseTo(1);
   });
 
+  it("resolves D-Pad directions independently for split type-8 rendering", () => {
+    const upOnly = snapshot({ dpadUp: 1 });
+    const leftOnly = snapshot({ dpadLeft: 1 });
+    const axisRight = snapshot({}, { dpadX: 0.8 });
+    const dpad = element({ type: 8, id: "D-Pad" });
+
+    expect(dpadDirectionValue("up", upOnly)).toBe(1);
+    expect(dpadDirectionValue("down", upOnly)).toBe(0);
+    expect(dpadDirectionValue("left", upOnly)).toBe(0);
+    expect(dpadDirectionValue("right", upOnly)).toBe(0);
+
+    expect(dpadDirectionValue("left", leftOnly)).toBe(1);
+    expect(dpadDirectionValue("right", leftOnly)).toBe(0);
+
+    expect(dpadDirectionValue("right", axisRight)).toBeCloseTo(0.8);
+    expect(dpadDirectionValue("left", axisRight)).toBe(0);
+
+    expect(
+      shouldRenderElement(dpad, getDpadDirectionRenderState("up", upOnly))
+    ).toBe(true);
+    expect(
+      shouldRenderElement(dpad, getDpadDirectionRenderState("down", upOnly))
+    ).toBe(false);
+  });
+
   it("renders base and stick layers even when their active value is zero", () => {
     const baseState = getElementRenderState(element({ type: 0 }), snapshot());
     const stickState = getElementRenderState(element({ type: 5 }), snapshot());
 
     expect(shouldRenderElement(element({ type: 0 }), baseState)).toBe(true);
     expect(shouldRenderElement(element({ type: 5 }), stickState)).toBe(true);
+  });
+
+  it("marks only non-body input elements active when their normalized value crosses the visual threshold", () => {
+    const body = element({ type: 0 });
+    const button = element({ type: 2, code: 0 });
+    const trigger = element({ type: 6, id: "lt", side: 0 });
+    const stick = element({ type: 5, side: 0 });
+    const inactive = snapshot({ south: 0.2 }, { leftTrigger: 0.2, leftStickX: 0.03 });
+    const active = snapshot({ south: 1 }, { leftTrigger: 0.7, leftStickX: 0.4 });
+
+    expect(isElementActive(body, getElementRenderState(body, active))).toBe(false);
+    expect(isElementActive(button, getElementRenderState(button, inactive))).toBe(
+      false
+    );
+    expect(isElementActive(trigger, getElementRenderState(trigger, inactive))).toBe(
+      false
+    );
+    expect(isElementActive(stick, getElementRenderState(stick, inactive))).toBe(
+      false
+    );
+    expect(isElementActive(button, getElementRenderState(button, active))).toBe(true);
+    expect(isElementActive(trigger, getElementRenderState(trigger, active))).toBe(
+      true
+    );
+    expect(isElementActive(stick, getElementRenderState(stick, active))).toBe(true);
   });
 
   it("validates supported DualSense extension preset elements", () => {
@@ -172,5 +257,93 @@ describe("overlay mapping", () => {
         element({ id: "Unknown Element", type: 99 })
       ])
     ).toThrow("unsupported");
+  });
+
+  it("renders active Xbox face buttons, shoulders, triggers, and D-Pad from the bundled preset", () => {
+    validateOverlayPresetElements("xbox-controller", xboxPreset.elements);
+
+    const rendered = renderableElementIds(
+      xboxPreset,
+      snapshot(
+        {
+          south: 1,
+          east: 1,
+          west: 1,
+          north: 1,
+          leftBumper: 1,
+          rightBumper: 1,
+          dpadUp: 1,
+          dpadDown: 1,
+          dpadLeft: 1,
+          dpadRight: 1
+        },
+        {
+          leftTrigger: 1,
+          rightTrigger: 1
+        }
+      )
+    );
+
+    expect(rendered).toEqual(
+      expect.arrayContaining([
+        "a",
+        "b",
+        "x",
+        "y",
+        "ls",
+        "rs",
+        "dpad_up",
+        "dpad_down",
+        "dpad_left",
+        "dpad_right",
+        "lt",
+        "rt"
+      ])
+    );
+  });
+
+  it("renders active DualSense D-Pad, shoulders, and triggers from the bundled preset", () => {
+    validateOverlayPresetElements("dualsense", dualSensePreset.elements);
+
+    const dpad = presetElement(
+      dualSensePreset,
+      (presetElement) => presetElement.type === 8
+    );
+    const leftTrigger = presetElement(
+      dualSensePreset,
+      (presetElement) => presetElement.id === "PS5 Left Trigger L2"
+    );
+    const rightTrigger = presetElement(
+      dualSensePreset,
+      (presetElement) => presetElement.id === "PS5 Right Trigger R2"
+    );
+
+    const controller = snapshot(
+      {
+        leftBumper: 1,
+        rightBumper: 1,
+        dpadUp: 1
+      },
+      {
+        leftTrigger: 0.7,
+        rightTrigger: 0.8
+      }
+    );
+    const rendered = renderableElementIds(dualSensePreset, controller);
+
+    expect(shouldRenderElement(dpad, getElementRenderState(dpad, controller))).toBe(
+      true
+    );
+    expect(triggerValue(leftTrigger, controller)).toBeCloseTo(0.7);
+    expect(triggerValue(rightTrigger, controller)).toBeCloseTo(0.8);
+    expect(rendered).toEqual(
+      expect.arrayContaining([
+        "D-Pad",
+        "PS5 Left Bumper L1",
+        "PS5 Right Bumper R1",
+        "PS5 Left Trigger L2",
+        "PS5 Right Trigger R2"
+      ])
+    );
   });
 });

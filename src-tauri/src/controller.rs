@@ -7,13 +7,16 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
 use crate::profiles::{
-    device_identity, match_profile, profile_by_id, profile_info, DeviceIdentity, ProfileId,
-    ProfileInfo, RawButtonCode, TriggerAxisMode, UnsupportedDevice,
+    device_identity, match_profile, profile_by_id, profile_info, ControllerFamily,
+    ControllerProfile, DeviceIdentity, ProfileId, ProfileInfo, RawButtonCode, TriggerAxisMode,
+    UnsupportedDevice,
 };
 use crate::settings::{AppSettings, InputSettings, SimulationScenario};
+use crate::xinput::{XInputPoller, XInputSnapshot};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(8);
 const IDLE_SNAPSHOT_INTERVAL: Duration = Duration::from_millis(250);
+const INPUT_EVENT_EMIT_INTERVAL: Duration = Duration::from_millis(90);
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -96,8 +99,21 @@ pub fn spawn_controller_poll(app: AppHandle, settings: Arc<Mutex<AppSettings>>) 
         };
 
         let mut last_emit = Instant::now() - IDLE_SNAPSHOT_INTERVAL;
+        let mut last_input_event_emit = Instant::now() - INPUT_EVENT_EMIT_INTERVAL;
         let mut last_simulated_connected: Option<bool> = None;
+        let mut xinput = XInputPoller::new();
         loop {
+            let settings_snapshot = match settings.lock() {
+                Ok(guard) => guard.clone(),
+                Err(_) => {
+                    emit_or_log(
+                        &app,
+                        "controller-error",
+                        "settings lock is poisoned; controller polling stopped",
+                    );
+                    return;
+                }
+            };
             let mut changed = false;
             while let Some(event) = gilrs.next_event() {
                 changed = true;
@@ -108,21 +124,38 @@ pub fn spawn_controller_poll(app: AppHandle, settings: Arc<Mutex<AppSettings>>) 
                         format!("{:?}", event.event),
                     );
                 }
+                if let Some(message) = input_event_message(&event.event) {
+                    let is_button_event = matches!(
+                        event.event,
+                        EventType::ButtonPressed(..)
+                            | EventType::ButtonReleased(..)
+                            | EventType::ButtonRepeated(..)
+                            | EventType::ButtonChanged(..)
+                    );
+                    if is_button_event
+                        || last_input_event_emit.elapsed() >= INPUT_EVENT_EMIT_INTERVAL
+                    {
+                        emit_or_log(&app, "controller-device-event", message);
+                        last_input_event_emit = Instant::now();
+                    }
+                }
+            }
+
+            let xinput_poll = if settings_snapshot.simulation.enabled {
+                None
+            } else {
+                Some(xinput.poll(&settings_snapshot.input))
+            };
+
+            if let Some(poll) = &xinput_poll {
+                changed |= poll.changed;
+                for event in &poll.events {
+                    emit_or_log(&app, "controller-device-event", event.clone());
+                }
             }
 
             if changed || last_emit.elapsed() >= IDLE_SNAPSHOT_INTERVAL {
                 let elapsed_ms = started_at.elapsed().as_millis();
-                let settings_snapshot = match settings.lock() {
-                    Ok(guard) => guard.clone(),
-                    Err(_) => {
-                        emit_or_log(
-                            &app,
-                            "controller-error",
-                            "settings lock is poisoned; controller polling stopped",
-                        );
-                        return;
-                    }
-                };
                 let snapshot = if settings_snapshot.simulation.enabled {
                     let snapshot = build_simulated_snapshot(&settings_snapshot, elapsed_ms);
                     if matches!(
@@ -144,7 +177,12 @@ pub fn spawn_controller_poll(app: AppHandle, settings: Arc<Mutex<AppSettings>>) 
                     snapshot
                 } else {
                     last_simulated_connected = None;
-                    build_hardware_snapshot(&gilrs, &settings_snapshot, elapsed_ms)
+                    build_hardware_snapshot(
+                        &gilrs,
+                        &settings_snapshot,
+                        xinput_poll.as_ref().and_then(|poll| poll.active.as_ref()),
+                        elapsed_ms,
+                    )
                 };
                 emit_or_log(&app, "controller-state", snapshot);
                 last_emit = Instant::now();
@@ -158,6 +196,7 @@ pub fn spawn_controller_poll(app: AppHandle, settings: Arc<Mutex<AppSettings>>) 
 fn build_hardware_snapshot(
     gilrs: &Gilrs,
     settings: &AppSettings,
+    xinput: Option<&XInputSnapshot>,
     updated_at_ms: u128,
 ) -> ControllerSnapshot {
     let active = gilrs.gamepads().find(|(_, gamepad)| gamepad.is_connected());
@@ -165,41 +204,93 @@ fn build_hardware_snapshot(
     if let Some((id, gamepad)) = active {
         let identity = device_identity(id, &gamepad);
         match match_profile(&identity) {
-            Ok(profile) => match read_controller_state(&gamepad, &profile, &settings.input) {
-                Ok((buttons, axes)) => ControllerSnapshot {
-                    status: ControllerStatus::Active,
-                    connected: true,
-                    id: Some(identity.id.clone()),
-                    name: Some(identity.name.clone()),
-                    device: Some(identity),
-                    profile: Some(profile_info(&profile)),
-                    unsupported: None,
-                    buttons,
-                    axes,
-                    updated_at_ms,
-                },
-                Err(reason) => unsupported_snapshot(
-                    identity,
-                    Some(profile_info(&profile)),
-                    reason,
-                    updated_at_ms,
-                ),
-            },
-            Err(unsupported) => ControllerSnapshot {
-                status: ControllerStatus::Unsupported,
-                connected: true,
-                id: Some(identity.id.clone()),
-                name: Some(identity.name.clone()),
-                device: Some(identity),
-                profile: None,
-                unsupported: Some(unsupported),
-                buttons: ControllerButtons::default(),
-                axes: ControllerAxes::default(),
-                updated_at_ms,
-            },
+            Ok(profile) => {
+                if let Some(xinput) = xinput.filter(|_| should_read_profile_from_xinput(&profile)) {
+                    return xinput_hardware_snapshot(
+                        xinput,
+                        Some(identity),
+                        Some(profile_info(&profile)),
+                        updated_at_ms,
+                    );
+                }
+
+                match read_controller_state(&gamepad, &profile, &settings.input) {
+                    Ok((buttons, axes)) => ControllerSnapshot {
+                        status: ControllerStatus::Active,
+                        connected: true,
+                        id: Some(identity.id.clone()),
+                        name: Some(identity.name.clone()),
+                        device: Some(identity),
+                        profile: Some(profile_info(&profile)),
+                        unsupported: None,
+                        buttons,
+                        axes,
+                        updated_at_ms,
+                    },
+                    Err(reason) => unsupported_snapshot(
+                        identity,
+                        Some(profile_info(&profile)),
+                        reason,
+                        updated_at_ms,
+                    ),
+                }
+            }
+            Err(unsupported) => {
+                if let Some(xinput) = xinput {
+                    xinput_hardware_snapshot(xinput, None, None, updated_at_ms)
+                } else {
+                    ControllerSnapshot {
+                        status: ControllerStatus::Unsupported,
+                        connected: true,
+                        id: Some(identity.id.clone()),
+                        name: Some(identity.name.clone()),
+                        device: Some(identity),
+                        profile: None,
+                        unsupported: Some(unsupported),
+                        buttons: ControllerButtons::default(),
+                        axes: ControllerAxes::default(),
+                        updated_at_ms,
+                    }
+                }
+            }
         }
+    } else if let Some(xinput) = xinput {
+        xinput_hardware_snapshot(xinput, None, None, updated_at_ms)
     } else {
         empty_snapshot(updated_at_ms)
+    }
+}
+
+fn should_read_profile_from_xinput(profile: &ControllerProfile) -> bool {
+    matches!(
+        profile.family,
+        ControllerFamily::Xbox | ControllerFamily::XInput
+    )
+}
+
+fn xinput_hardware_snapshot(
+    xinput: &XInputSnapshot,
+    preferred_identity: Option<DeviceIdentity>,
+    preferred_profile: Option<ProfileInfo>,
+    updated_at_ms: u128,
+) -> ControllerSnapshot {
+    let mut identity = preferred_identity.unwrap_or_else(|| xinput.identity.clone());
+    identity.xinput = Some(xinput.device.clone());
+    if identity.xinput_driver.is_none() {
+        identity.xinput_driver = xinput.identity.xinput_driver.clone();
+    }
+
+    ControllerSnapshot {
+        status: ControllerStatus::Active,
+        connected: true,
+        id: Some(identity.id.clone()),
+        name: Some(identity.name.clone()),
+        device: Some(identity),
+        profile: Some(preferred_profile.unwrap_or_else(|| xinput.profile.clone())),
+        unsupported: None,
+        buttons: xinput.buttons.clone(),
+        axes: xinput.axes.clone(),
+        updated_at_ms,
     }
 }
 
@@ -245,32 +336,32 @@ fn read_controller_state(
         settings.invert_right_y ^ transform.invert_right_y,
     );
 
-    let left_trigger_axis = apply_trigger_axis(
-        required_axis_value(
-            gamepad,
-            map.left_trigger_axis,
-            "left_trigger_axis",
-            trigger_rest_value(transform.left_trigger_axis_mode),
-        )?,
-        transform.left_trigger_axis_mode,
-        settings.trigger_deadzone,
-        settings.trigger_sensitivity,
-    );
-    let right_trigger_axis = apply_trigger_axis(
-        required_axis_value(
-            gamepad,
-            map.right_trigger_axis,
-            "right_trigger_axis",
-            trigger_rest_value(transform.right_trigger_axis_mode),
-        )?,
-        transform.right_trigger_axis_mode,
-        settings.trigger_deadzone,
-        settings.trigger_sensitivity,
-    );
     let left_trigger_button =
-        optional_button_value(gamepad, map.left_trigger_button, "left_trigger_button")?;
+        configured_button_value(gamepad, map.left_trigger_button).unwrap_or(0.0);
     let right_trigger_button =
-        optional_button_value(gamepad, map.right_trigger_button, "right_trigger_button")?;
+        configured_button_value(gamepad, map.right_trigger_button).unwrap_or(0.0);
+    let left_trigger = trigger_value(
+        gamepad,
+        TriggerSources {
+            axis: map.left_trigger_axis,
+            button: map.left_trigger_button,
+            mode: transform.left_trigger_axis_mode,
+        },
+        "left_trigger",
+        settings.trigger_deadzone,
+        settings.trigger_sensitivity,
+    )?;
+    let right_trigger = trigger_value(
+        gamepad,
+        TriggerSources {
+            axis: map.right_trigger_axis,
+            button: map.right_trigger_button,
+            mode: transform.right_trigger_axis_mode,
+        },
+        "right_trigger",
+        settings.trigger_deadzone,
+        settings.trigger_sensitivity,
+    )?;
 
     let dpad_x = match optional_axis_value(gamepad, map.dpad_x, "dpad_x")? {
         Some(value) => apply_stick_axis(value, 0.01, 1.0, false),
@@ -318,8 +409,8 @@ fn read_controller_state(
             left_stick_y,
             right_stick_x,
             right_stick_y,
-            left_trigger: left_trigger_axis.max(left_trigger_button),
-            right_trigger: right_trigger_axis.max(right_trigger_button),
+            left_trigger,
+            right_trigger,
             dpad_x,
             dpad_y,
         },
@@ -476,6 +567,8 @@ fn simulated_identity(display_name: &str) -> DeviceIdentity {
         vendor_id: None,
         product_id: None,
         uuid: "simulation".to_string(),
+        xinput_driver: None,
+        xinput: None,
     }
 }
 
@@ -513,17 +606,6 @@ fn required_button_value(
         .button_data(code)
         .map(|button| button.value().clamp(0.0, 1.0))
         .unwrap_or(0.0))
-}
-
-fn optional_button_value(
-    gamepad: &Gamepad<'_>,
-    button: Option<Button>,
-    logical_name: &str,
-) -> Result<f32, String> {
-    match button {
-        Some(button) => required_button_value(gamepad, button, logical_name),
-        None => Ok(0.0),
-    }
 }
 
 fn required_axis_value(
@@ -565,6 +647,81 @@ fn optional_raw_button_value(gamepad: &Gamepad<'_>, raw_code: Option<RawButtonCo
         .find(|(code, _)| code.into_u32() == raw_code.packed_gilrs_code)
         .map(|(_, button)| button.value().clamp(0.0, 1.0))
         .unwrap_or(0.0)
+}
+
+#[derive(Clone, Copy, Debug)]
+struct TriggerSources {
+    axis: Option<Axis>,
+    button: Option<Button>,
+    mode: TriggerAxisMode,
+}
+
+fn trigger_value(
+    gamepad: &Gamepad<'_>,
+    sources: TriggerSources,
+    logical_name: &str,
+    deadzone: f32,
+    sensitivity: f32,
+) -> Result<f32, String> {
+    let axis_value = configured_axis_value(gamepad, sources.axis, trigger_rest_value(sources.mode))
+        .map(|value| apply_trigger_axis(value, sources.mode, deadzone, sensitivity));
+    let button_value = configured_button_value(gamepad, sources.button);
+
+    match (axis_value, button_value) {
+        (Some(axis), Some(button)) => Ok(axis.max(button)),
+        (Some(axis), None) => Ok(axis),
+        (None, Some(button)) => Ok(button),
+        (None, None) => Err(format!(
+            "Mapped trigger '{logical_name}' is not exposed by gilrs as {}.",
+            trigger_source_description(sources)
+        )),
+    }
+}
+
+fn configured_axis_value(
+    gamepad: &Gamepad<'_>,
+    axis: Option<Axis>,
+    default_value: f32,
+) -> Option<f32> {
+    let axis = axis?;
+    let code = gamepad.axis_code(axis)?;
+
+    Some(
+        gamepad
+            .state()
+            .axis_data(code)
+            .map(|axis| axis.value().clamp(-1.0, 1.0))
+            .unwrap_or(default_value.clamp(-1.0, 1.0)),
+    )
+}
+
+fn configured_button_value(gamepad: &Gamepad<'_>, button: Option<Button>) -> Option<f32> {
+    let button = button?;
+    let code = gamepad.button_code(button)?;
+
+    Some(
+        gamepad
+            .state()
+            .button_data(code)
+            .map(|button| button.value().clamp(0.0, 1.0))
+            .unwrap_or(0.0),
+    )
+}
+
+fn trigger_source_description(sources: TriggerSources) -> String {
+    let mut parts = Vec::new();
+    if let Some(axis) = sources.axis {
+        parts.push(format!("axis {axis:?}"));
+    }
+    if let Some(button) = sources.button {
+        parts.push(format!("button {button:?}"));
+    }
+
+    if parts.is_empty() {
+        "any configured trigger source".to_string()
+    } else {
+        parts.join(" or ")
+    }
 }
 
 fn apply_stick_axis(value: f32, deadzone: f32, sensitivity: f32, invert: bool) -> f32 {
@@ -642,6 +799,32 @@ fn apply_simulated_extra_buttons(
     }
 }
 
+fn input_event_message(event: &EventType) -> Option<String> {
+    match event {
+        EventType::ButtonPressed(button, code) => Some(format!(
+            "Input ButtonPressed {button:?} raw={}",
+            code.into_u32()
+        )),
+        EventType::ButtonReleased(button, code) => Some(format!(
+            "Input ButtonReleased {button:?} raw={}",
+            code.into_u32()
+        )),
+        EventType::ButtonRepeated(button, code) => Some(format!(
+            "Input ButtonRepeated {button:?} raw={}",
+            code.into_u32()
+        )),
+        EventType::ButtonChanged(button, value, code) => Some(format!(
+            "Input ButtonChanged {button:?} value={value:.2} raw={}",
+            code.into_u32()
+        )),
+        EventType::AxisChanged(axis, value, code) if value.abs() >= 0.08 => Some(format!(
+            "Input AxisChanged {axis:?} value={value:.2} raw={}",
+            code.into_u32()
+        )),
+        _ => None,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -656,6 +839,36 @@ mod tests {
             apply_trigger_axis(1.0, TriggerAxisMode::SignedMinusOneToOne, 0.0, 1.0),
             1.0
         );
+    }
+
+    #[test]
+    fn trigger_source_description_names_axis_and_button_sources() {
+        let description = trigger_source_description(TriggerSources {
+            axis: Some(Axis::LeftZ),
+            button: Some(Button::LeftTrigger2),
+            mode: TriggerAxisMode::PositiveZeroToOne,
+        });
+
+        assert!(description.contains("axis LeftZ"));
+        assert!(description.contains("button LeftTrigger2"));
+    }
+
+    #[test]
+    fn input_event_message_reports_mapped_and_unknown_input_activity() {
+        let pressed = input_event_message(&EventType::ButtonPressed(
+            Button::South,
+            Button::South.to_nec().unwrap(),
+        ))
+        .unwrap();
+        let changed = input_event_message(&EventType::ButtonChanged(
+            Button::LeftTrigger2,
+            0.5,
+            Button::LeftTrigger2.to_nec().unwrap(),
+        ))
+        .unwrap();
+
+        assert!(pressed.contains("ButtonPressed South"));
+        assert!(changed.contains("ButtonChanged LeftTrigger2"));
     }
 
     #[test]

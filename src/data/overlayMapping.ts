@@ -32,6 +32,9 @@ const SUPPORTED_BUTTON_CODE_LABELS = new Map<number, string>(
   Object.entries(INPUT_OVERLAY_BUTTON_CODES).map(([label, code]) => [code, label])
 );
 
+export const DPAD_DIRECTIONS = ["up", "down", "left", "right"] as const;
+export type DpadDirection = (typeof DPAD_DIRECTIONS)[number];
+
 export type ElementRenderState = {
   value: number;
   x: number;
@@ -117,12 +120,14 @@ export function getElementRenderState(
   }
 
   if (element.type === 8) {
-    const x = dpadAxisX(controller);
-    const y = dpadAxisY(controller);
     return {
-      value: Math.max(Math.abs(x), Math.abs(y)),
-      x: x * 6,
-      y: y * 6,
+      value: Math.max(
+        ...DPAD_DIRECTIONS.map((direction) =>
+          dpadDirectionValue(direction, controller)
+        )
+      ),
+      x: 0,
+      y: 0,
       clipRatio: null,
       analog: false
     };
@@ -145,9 +150,53 @@ export function getElementRenderState(
   };
 }
 
+export function getDpadDirectionRenderState(
+  direction: DpadDirection,
+  controller: ControllerSnapshot
+): ElementRenderState {
+  return {
+    value: dpadDirectionValue(direction, controller),
+    x: 0,
+    y: 0,
+    clipRatio: null,
+    analog: false
+  };
+}
+
+export function dpadDirectionValue(
+  direction: DpadDirection,
+  controller: ControllerSnapshot
+) {
+  const x = dpadAxisX(controller);
+  const y = dpadAxisY(controller);
+
+  switch (direction) {
+    case "up":
+      return clampPositive(Math.max(controller.buttons.dpadUp, -y));
+    case "down":
+      return clampPositive(Math.max(controller.buttons.dpadDown, y));
+    case "left":
+      return clampPositive(Math.max(controller.buttons.dpadLeft, -x));
+    case "right":
+      return clampPositive(Math.max(controller.buttons.dpadRight, x));
+  }
+}
+
 export function shouldRenderElement(element: OverlayElement, state: ElementRenderState) {
   if (element.type === 0 || element.type === 5) {
     return true;
+  }
+
+  return state.value > BUTTON_THRESHOLD;
+}
+
+export function isElementActive(element: OverlayElement, state: ElementRenderState) {
+  if (element.type === 0) {
+    return false;
+  }
+
+  if (element.type === 5) {
+    return state.value > STICK_DEADZONE;
   }
 
   return state.value > BUTTON_THRESHOLD;
@@ -285,6 +334,10 @@ export function deadzone(value: number) {
 
 export function clampSigned(value: number) {
   return Math.max(-1, Math.min(1, value));
+}
+
+function clampPositive(value: number) {
+  return Math.max(0, Math.min(1, value));
 }
 
 function canMapButtonElementById(id: string) {

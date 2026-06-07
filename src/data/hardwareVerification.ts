@@ -419,6 +419,8 @@ export function buildHardwareVerificationReport(input: HardwareReportInput) {
     `- Device name: \`${observation?.device?.name ?? input.latestController.name ?? "not-detected"}\``,
     `- VID: \`${formatHexDisplay(observation?.device?.vendorId ?? null)}\``,
     `- PID: \`${formatHexDisplay(observation?.device?.productId ?? null)}\``,
+    `- XInput driver evidence: \`${formatXInputDriverEvidence(observation?.device ?? input.latestController.device)}\``,
+    `- XInput API state: \`${formatXInputApiState(observation?.device ?? input.latestController.device)}\``,
     `- Tester: ${input.tester.trim() || "not-recorded"}`,
     "",
     "## Evidence Guardrails",
@@ -546,4 +548,29 @@ function formatHexDisplay(value: number | null) {
   }
 
   return `0x${value.toString(16).padStart(4, "0")}`;
+}
+
+function formatXInputDriverEvidence(device: DeviceIdentity | null) {
+  const evidence = device?.xinputDriver;
+  if (!evidence) {
+    return "not-detected";
+  }
+
+  const details = [
+    evidence.source,
+    evidence.className,
+    evidence.service,
+    ...evidence.compatibleIds
+  ].filter((value): value is string => Boolean(value));
+
+  return details.join(", ");
+}
+
+function formatXInputApiState(device: DeviceIdentity | null) {
+  const xinput = device?.xinput;
+  if (!xinput) {
+    return "not-detected";
+  }
+
+  return `slot ${xinput.slot + 1}, packet ${xinput.packetNumber}`;
 }

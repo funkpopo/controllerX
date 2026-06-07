@@ -57,6 +57,19 @@ export function DebugPanel({ controller, deviceEvents }: DebugPanelProps) {
         <div className="debug-device">
           <span>VID {formatHex(controller.device.vendorId)}</span>
           <span>PID {formatHex(controller.device.productId)}</span>
+          {controller.device.xinput ? (
+            <span>
+              XInput slot {controller.device.xinput.slot + 1} pkt{" "}
+              {controller.device.xinput.packetNumber}
+            </span>
+          ) : null}
+          {controller.device.xinputDriver ? (
+            <span>
+              XInput{" "}
+              {controller.device.xinputDriver.service ??
+                controller.device.xinputDriver.source}
+            </span>
+          ) : null}
         </div>
       ) : null}
       <section className="debug-section">

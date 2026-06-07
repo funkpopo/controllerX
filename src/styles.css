@@ -247,10 +247,20 @@ textarea {
 .sprite-layer {
   position: absolute;
   background-repeat: no-repeat;
-  will-change: transform, opacity;
+  pointer-events: none;
+  will-change: transform, opacity, filter;
   transition:
     opacity 48ms linear,
-    transform 48ms linear;
+    transform 48ms linear,
+    filter 48ms linear;
+}
+
+.sprite-layer.sprite-active {
+  filter:
+    brightness(1.36)
+    saturate(1.42)
+    drop-shadow(0 0 4px rgba(255, 255, 255, 0.82))
+    drop-shadow(0 0 15px rgba(125, 222, 223, 0.82));
 }
 
 .sprite-type-0 {

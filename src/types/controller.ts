@@ -14,6 +14,21 @@ export type DeviceIdentity = {
   vendorId: number | null;
   productId: number | null;
   uuid: string;
+  xinputDriver: XInputDriverEvidence | null;
+  xinput: XInputDevice | null;
+};
+
+export type XInputDriverEvidence = {
+  source: string;
+  deviceInstanceId: string;
+  className: string | null;
+  service: string | null;
+  compatibleIds: string[];
+};
+
+export type XInputDevice = {
+  slot: number;
+  packetNumber: number;
 };
 
 export type ProfileInfo = {
@@ -21,7 +36,7 @@ export type ProfileInfo = {
   displayName: string;
   family: ControllerFamily;
   presetId: string | null;
-  matchKind: "vendorProduct" | "xInputName";
+  matchKind: "vendorProduct" | "xInputName" | "xInputDriver" | "xInputApi";
   calibrationStatus: CalibrationStatus;
 };
 
