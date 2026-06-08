@@ -48,12 +48,7 @@ pub fn configure_main_window(
     window
         .set_skip_taskbar(false)
         .map_err(|error| format!("Failed to keep taskbar entry: {error}"))?;
-    window
-        .set_resizable(!settings.overlay.lock_position)
-        .map_err(|error| format!("Failed to set resize lock: {error}"))?;
-    window
-        .set_ignore_cursor_events(settings.overlay.click_through)
-        .map_err(|error| format!("Failed to set click-through mode: {error}"))?;
+    apply_window_interaction_state(&window, &settings)?;
     window
         .set_size(Size::Logical(LogicalSize::new(
             settings.overlay.window.width as f64,
@@ -74,7 +69,7 @@ pub fn configure_main_window(
     Ok(())
 }
 
-pub fn toggle_main_window(app: &AppHandle) -> Result<(), String> {
+pub fn toggle_main_window(app: &AppHandle) -> Result<bool, String> {
     let window = main_window(app)?;
     match window
         .is_visible()
@@ -82,6 +77,7 @@ pub fn toggle_main_window(app: &AppHandle) -> Result<(), String> {
     {
         true => window
             .hide()
+            .map(|_| false)
             .map_err(|error| format!("Failed to hide main window: {error}")),
         false => {
             window
@@ -89,7 +85,8 @@ pub fn toggle_main_window(app: &AppHandle) -> Result<(), String> {
                 .map_err(|error| format!("Failed to show main window: {error}"))?;
             window
                 .set_focus()
-                .map_err(|error| format!("Failed to focus main window: {error}"))
+                .map_err(|error| format!("Failed to focus main window: {error}"))?;
+            Ok(true)
         }
     }
 }
@@ -100,13 +97,15 @@ pub fn set_click_through(
     enabled: bool,
 ) -> Result<AppSettings, String> {
     let window = main_window(app)?;
-    window
-        .set_ignore_cursor_events(enabled)
-        .map_err(|error| format!("Failed to set click-through mode: {error}"))?;
 
-    update_settings(app, settings_state, |settings| {
+    let updated = update_settings(app, settings_state, |settings| {
         settings.overlay.click_through = enabled;
-    })
+    })?;
+    apply_window_interaction_state(&window, &updated)?;
+
+    emit_settings_updated(app, &updated);
+
+    Ok(updated)
 }
 
 pub fn set_lock_position(
@@ -115,13 +114,32 @@ pub fn set_lock_position(
     enabled: bool,
 ) -> Result<AppSettings, String> {
     let window = main_window(app)?;
-    window
-        .set_resizable(!enabled)
-        .map_err(|error| format!("Failed to update resize lock: {error}"))?;
 
-    update_settings(app, settings_state, |settings| {
+    let updated = update_settings(app, settings_state, |settings| {
         settings.overlay.lock_position = enabled;
-    })
+    })?;
+    apply_window_interaction_state(&window, &updated)?;
+
+    emit_settings_updated(app, &updated);
+
+    Ok(updated)
+}
+
+pub fn set_obs_mode(
+    app: &AppHandle,
+    settings_state: &Arc<Mutex<AppSettings>>,
+    enabled: bool,
+) -> Result<AppSettings, String> {
+    let window = main_window(app)?;
+
+    let updated = update_settings(app, settings_state, |settings| {
+        settings.overlay.obs_mode = enabled;
+    })?;
+    apply_window_interaction_state(&window, &updated)?;
+
+    emit_settings_updated(app, &updated);
+
+    Ok(updated)
 }
 
 pub fn set_named_size(
@@ -135,10 +153,14 @@ pub fn set_named_size(
         .set_size(Size::Logical(LogicalSize::new(width as f64, height as f64)))
         .map_err(|error| format!("Failed to set window size: {error}"))?;
 
-    update_settings(app, settings_state, |settings| {
+    let updated = update_settings(app, settings_state, |settings| {
         settings.overlay.window.width = width;
         settings.overlay.window.height = height;
-    })
+    })?;
+
+    emit_settings_updated(app, &updated);
+
+    Ok(updated)
 }
 
 pub fn update_settings(
@@ -163,12 +185,7 @@ pub fn replace_settings(
     settings::sanitize(&mut next_settings);
 
     let window = main_window(app)?;
-    window
-        .set_ignore_cursor_events(next_settings.overlay.click_through)
-        .map_err(|error| format!("Failed to apply click-through mode: {error}"))?;
-    window
-        .set_resizable(!next_settings.overlay.lock_position)
-        .map_err(|error| format!("Failed to apply resize lock: {error}"))?;
+    apply_window_interaction_state(&window, &next_settings)?;
     window
         .set_size(Size::Logical(LogicalSize::new(
             next_settings.overlay.window.width as f64,
@@ -215,8 +232,64 @@ fn main_window(app: &AppHandle) -> Result<WebviewWindow, String> {
         .ok_or_else(|| "Main window is not available.".to_string())
 }
 
+fn apply_window_interaction_state(
+    window: &WebviewWindow,
+    settings: &AppSettings,
+) -> Result<(), String> {
+    window
+        .set_resizable(overlay_resizable(settings))
+        .map_err(|error| format!("Failed to apply resize lock: {error}"))?;
+    window
+        .set_ignore_cursor_events(overlay_ignores_cursor_events(settings))
+        .map_err(|error| format!("Failed to apply click-through mode: {error}"))
+}
+
+fn overlay_resizable(settings: &AppSettings) -> bool {
+    !settings.overlay.lock_position && !settings.overlay.obs_mode
+}
+
+fn overlay_ignores_cursor_events(settings: &AppSettings) -> bool {
+    settings.overlay.click_through || settings.overlay.obs_mode
+}
+
+fn emit_settings_updated(app: &AppHandle, settings: &AppSettings) {
+    if let Err(error) = app.emit("settings-updated", settings) {
+        eprintln!("Failed to emit settings-updated: {error}");
+    }
+}
+
 fn emit_command_error(app: &AppHandle, message: String) {
     if let Err(error) = app.emit("app-command-error", message) {
         eprintln!("Failed to emit app-command-error: {error}");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn obs_mode_forces_capture_safe_window_interactions() {
+        let mut settings = AppSettings::default();
+        settings.overlay.obs_mode = true;
+        settings.overlay.click_through = false;
+        settings.overlay.lock_position = false;
+
+        assert!(overlay_ignores_cursor_events(&settings));
+        assert!(!overlay_resizable(&settings));
+    }
+
+    #[test]
+    fn normal_mode_uses_saved_click_and_lock_settings() {
+        let mut settings = AppSettings::default();
+
+        assert!(!overlay_ignores_cursor_events(&settings));
+        assert!(overlay_resizable(&settings));
+
+        settings.overlay.click_through = true;
+        settings.overlay.lock_position = true;
+
+        assert!(overlay_ignores_cursor_events(&settings));
+        assert!(!overlay_resizable(&settings));
     }
 }

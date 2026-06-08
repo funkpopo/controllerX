@@ -17,6 +17,7 @@ use crate::settings::AppSettings;
 const MENU_SHOW_HIDE: &str = "show_hide";
 const MENU_CLICK_THROUGH: &str = "click_through";
 const MENU_LOCK_POSITION: &str = "lock_position";
+const MENU_OBS_MODE: &str = "obs_mode";
 const MENU_SIZE_COMPACT: &str = "size_compact";
 const MENU_SIZE_STANDARD: &str = "size_standard";
 const MENU_SIZE_LARGE: &str = "size_large";
@@ -33,6 +34,7 @@ pub fn run() {
             get_profile_catalog,
             set_click_through,
             set_lock_position,
+            set_obs_mode,
             set_overlay_size,
             save_hardware_verification_report
         ])
@@ -67,8 +69,16 @@ fn get_settings(settings: State<'_, SettingsState>) -> Result<AppSettings, Strin
 fn update_settings(
     app: tauri::AppHandle,
     settings: State<'_, SettingsState>,
-    next_settings: AppSettings,
+    mut next_settings: AppSettings,
 ) -> Result<AppSettings, String> {
+    // Prevent updating obs_mode through the general update_settings command.
+    // OBS mode can only be toggled via the system tray menu.
+    let current_settings = settings
+        .lock()
+        .map_err(|_| "Settings lock is poisoned.".to_string())?;
+    next_settings.overlay.obs_mode = current_settings.overlay.obs_mode;
+    drop(current_settings);
+
     window_control::replace_settings(&app, &settings, next_settings)
 }
 
@@ -93,6 +103,15 @@ fn set_lock_position(
     enabled: bool,
 ) -> Result<AppSettings, String> {
     window_control::set_lock_position(&app, &settings, enabled)
+}
+
+#[tauri::command]
+fn set_obs_mode(
+    app: tauri::AppHandle,
+    settings: State<'_, SettingsState>,
+    enabled: bool,
+) -> Result<AppSettings, String> {
+    window_control::set_obs_mode(&app, &settings, enabled)
 }
 
 #[tauri::command]
@@ -125,7 +144,14 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
         .lock()
         .map(|settings| settings.clone())
         .map_err(|_| tauri::Error::Anyhow(anyhow::anyhow!("Settings lock is poisoned.")))?;
-    let show_hide = MenuItem::with_id(app, MENU_SHOW_HIDE, "显示/隐藏叠加层", true, None::<&str>)?;
+    let show_hide = CheckMenuItem::with_id(
+        app,
+        MENU_SHOW_HIDE,
+        "显示/隐藏叠加层",
+        true,
+        true,
+        None::<&str>,
+    )?;
     let click_through = CheckMenuItem::with_id(
         app,
         MENU_CLICK_THROUGH,
@@ -140,6 +166,14 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
         "锁定位置",
         true,
         initial_settings.overlay.lock_position,
+        None::<&str>,
+    )?;
+    let obs_mode = CheckMenuItem::with_id(
+        app,
+        MENU_OBS_MODE,
+        "OBS 模式（仅显示手柄）",
+        true,
+        initial_settings.overlay.obs_mode,
         None::<&str>,
     )?;
     let size_compact =
@@ -159,6 +193,7 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
             &show_hide,
             &click_through,
             &lock_position,
+            &obs_mode,
             &size_compact,
             &size_standard,
             &size_large,
@@ -166,12 +201,17 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
         ],
     )?;
 
+    let show_hide_for_menu = show_hide.clone();
+    let show_hide_for_tray = show_hide.clone();
+
     let mut builder = TrayIconBuilder::with_id("controllerx")
         .tooltip("controllerX")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id().as_ref() {
-            MENU_SHOW_HIDE => emit_if_error(app, window_control::toggle_main_window(app)),
+            MENU_SHOW_HIDE => {
+                emit_if_error(app, toggle_overlay_visibility(app, &show_hide_for_menu))
+            }
             MENU_CLICK_THROUGH => match current_settings(&settings_state) {
                 Ok(settings) => emit_if_error(
                     app,
@@ -193,6 +233,14 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
                         !settings.overlay.lock_position,
                     )
                     .map(|_| ()),
+                ),
+                Err(error) => emit_command_error(app, error),
+            },
+            MENU_OBS_MODE => match current_settings(&settings_state) {
+                Ok(settings) => emit_if_error(
+                    app,
+                    window_control::set_obs_mode(app, &settings_state, !settings.overlay.obs_mode)
+                        .map(|_| ()),
                 ),
                 Err(error) => emit_command_error(app, error),
             },
@@ -232,7 +280,7 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
             MENU_QUIT => app.exit(0),
             id => emit_command_error(app, format!("Unhandled tray menu event '{id}'.")),
         })
-        .on_tray_icon_event(|tray, event| {
+        .on_tray_icon_event(move |tray, event| {
             if let TrayIconEvent::Click {
                 button: MouseButton::Left,
                 button_state: MouseButtonState::Up,
@@ -241,7 +289,7 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
             {
                 emit_if_error(
                     tray.app_handle(),
-                    window_control::toggle_main_window(tray.app_handle()),
+                    toggle_overlay_visibility(tray.app_handle(), &show_hide_for_tray),
                 );
             }
         });
@@ -267,6 +315,16 @@ fn emit_if_error(app: &tauri::AppHandle, result: Result<(), String>) {
     if let Err(error) = result {
         emit_command_error(app, error);
     }
+}
+
+fn toggle_overlay_visibility(
+    app: &tauri::AppHandle,
+    show_hide: &CheckMenuItem<tauri::Wry>,
+) -> Result<(), String> {
+    let visible = window_control::toggle_main_window(app)?;
+    show_hide
+        .set_checked(visible)
+        .map_err(|error| format!("Failed to update tray visibility check: {error}"))
 }
 
 fn emit_command_error(app: &tauri::AppHandle, message: String) {

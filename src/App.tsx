@@ -2,20 +2,18 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import {
   Bug,
-  Eye,
   EyeOff,
-  GripHorizontal,
   ListChecks,
   Lock,
   MousePointer2,
   PanelTopClose,
-  SlidersHorizontal,
   Unlock
 } from "lucide-react";
 import { useEffect, useMemo, useState, type ChangeEvent } from "react";
 import { ControllerOverlay } from "./components/ControllerOverlay";
 import { DebugPanel } from "./components/DebugPanel";
 import { HardwareVerificationPanel } from "./components/HardwareVerificationPanel";
+import { OverlayAdjustments } from "./components/OverlayAdjustments";
 import { StatePanel } from "./components/StatePanel";
 import { OVERLAY_PRESETS, selectPreset } from "./data/presets";
 import { useAppSettings } from "./hooks/useAppSettings";
@@ -94,6 +92,7 @@ function ReadyApp({
   const [verificationVisible, setVerificationVisible] = useState(false);
   const [toolbarVisible, setToolbarVisible] = useState(true);
   const [toolbarActivity, setToolbarActivity] = useState(0);
+  const [adjustOpen, setAdjustOpen] = useState(false);
   const [commandError, setCommandError] = useState<string | null>(null);
 
   const preset = useMemo(() => {
@@ -111,7 +110,11 @@ function ReadyApp({
   }, [controller, settings.overlay.selectedPresetId]);
 
   useEffect(() => {
-    if (!settings.overlay.hideToolbarWhenIdle || settings.overlay.clickThrough) {
+    if (
+      !settings.overlay.hideToolbarWhenIdle ||
+      settings.overlay.clickThrough ||
+      adjustOpen
+    ) {
       setToolbarVisible(true);
       return;
     }
@@ -125,6 +128,7 @@ function ReadyApp({
     return () => window.clearTimeout(timeout);
   }, [
     toolbarActivity,
+    adjustOpen,
     settings.overlay.clickThrough,
     settings.overlay.hideToolbarWhenIdle,
     settings.overlay.toolbarIdleMs
@@ -177,8 +181,9 @@ function ReadyApp({
     }
   }, [settings.overlay.clickThrough]);
 
-  const lockTitle = settings.overlay.lockPosition ? "位置已锁定" : "拖动窗口";
-  const showControls = !settings.overlay.clickThrough;
+  const toolbarTitle = settings.overlay.lockPosition ? "位置已锁定" : "拖动工具栏移动窗口";
+  const showControls = !settings.overlay.clickThrough && !settings.overlay.obsMode;
+  const showOverlayMessages = !settings.overlay.obsMode;
 
   const toggleClickThrough = () =>
     runCommand(setClickThrough(!settings.overlay.clickThrough));
@@ -186,9 +191,17 @@ function ReadyApp({
   const toggleLockPosition = () =>
     runCommand(setLockPosition(!settings.overlay.lockPosition));
 
+  const setOpacity = (value: number) => {
+    void update((next) => {
+      next.overlay.opacity = value;
+      return next;
+    });
+  };
+
   const appClassName = [
     "app",
     showControls ? "" : "click-through-active",
+    settings.overlay.obsMode ? "obs-mode-active" : "",
     toolbarVisible ? "" : "toolbar-hidden"
   ]
     .filter(Boolean)
@@ -198,7 +211,11 @@ function ReadyApp({
     <main
       className={appClassName}
       onPointerMove={() => {
-        if (settings.overlay.hideToolbarWhenIdle && !settings.overlay.clickThrough) {
+        if (
+          settings.overlay.hideToolbarWhenIdle &&
+          !settings.overlay.clickThrough &&
+          !settings.overlay.obsMode
+        ) {
           setToolbarVisible(true);
           setToolbarActivity((value) => value + 1);
         }
@@ -207,22 +224,19 @@ function ReadyApp({
       {showControls ? (
         <div
           className="toolbar"
-          data-tauri-drag-region
-        >
-          <button
-            className="icon-button drag-handle"
-            aria-label="拖动窗口"
-            title={lockTitle}
-            disabled={settings.overlay.lockPosition}
-            onPointerDown={() => {
-              if (!settings.overlay.lockPosition) {
-                void getCurrentWindow().startDragging();
-              }
-            }}
-          >
-            <GripHorizontal size={17} />
-          </button>
+          title={toolbarTitle}
+          onPointerDown={(event) => {
+            if (
+              settings.overlay.lockPosition ||
+              event.button !== 0 ||
+              isInteractiveToolbarTarget(event.target)
+            ) {
+              return;
+            }
 
+            void getCurrentWindow().startDragging();
+          }}
+        >
           <div className="device-status" title={status}>
             <span className={`status-dot status-${controller.status}`} />
             <span className="status-text">{status}</span>
@@ -247,39 +261,12 @@ function ReadyApp({
             ))}
           </select>
 
-          <label className="range-control" title="透明度">
-            <Eye size={15} />
-            <input
-              type="range"
-              min="0.25"
-              max="1"
-              step="0.01"
-              value={settings.overlay.opacity}
-              onChange={(event) =>
-                void update((next) => {
-                  next.overlay.opacity = Number(event.target.value);
-                  return next;
-                })
-              }
-            />
-          </label>
-
-          <label className="range-control" title="大小">
-            <SlidersHorizontal size={15} />
-            <input
-              type="range"
-              min="0.45"
-              max="1.2"
-              step="0.01"
-              value={settings.overlay.scale}
-              onChange={(event) =>
-                void update((next) => {
-                  next.overlay.scale = Number(event.target.value);
-                  return next;
-                })
-              }
-            />
-          </label>
+          <OverlayAdjustments
+            opacity={settings.overlay.opacity}
+            onOpacityChange={setOpacity}
+            open={adjustOpen}
+            onOpenChange={setAdjustOpen}
+          />
 
           <button
             className={`icon-button ${settings.overlay.clickThrough ? "active" : ""}`}
@@ -334,17 +321,20 @@ function ReadyApp({
       ) : null}
 
       <section className="overlay-workspace">
-        {activeError ? <StatePanel controller={controller} message={activeError} /> : null}
+        {activeError && showOverlayMessages ? (
+          <StatePanel controller={controller} message={activeError} />
+        ) : null}
         {!activeError && preset.value ? (
           <ControllerOverlay
             controller={controller}
             preset={preset.value}
             opacity={settings.overlay.opacity}
-            scale={settings.overlay.scale}
             debugVisible={debugVisible}
           />
         ) : null}
-        {!activeError && !preset.value ? <StatePanel controller={controller} /> : null}
+        {!activeError && !preset.value && showOverlayMessages ? (
+          <StatePanel controller={controller} />
+        ) : null}
         {debugVisible && showControls ? (
           <DebugPanel controller={controller} deviceEvents={deviceEvents} />
         ) : null}
@@ -369,7 +359,7 @@ function ReadyApp({
         />
       ) : null}
 
-      {settings.overlay.clickThrough ? (
+      {settings.overlay.clickThrough && !settings.overlay.obsMode ? (
         <div className="click-through-badge" aria-hidden="true">
           Click-through
         </div>
@@ -396,6 +386,17 @@ function statusText(controller: ControllerSnapshot) {
 
 function formatError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function isInteractiveToolbarTarget(target: EventTarget | null) {
+  return (
+    target instanceof Element &&
+    Boolean(
+      target.closest(
+        "button, select, input, textarea, label, [role='dialog'], .adjust-popover"
+      )
+    )
+  );
 }
 
 function updateNumber(

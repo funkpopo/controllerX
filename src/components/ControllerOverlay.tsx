@@ -23,7 +23,6 @@ type ControllerOverlayProps = {
   preset: OverlayPreset;
   controller: ControllerSnapshot;
   opacity: number;
-  scale: number;
   debugVisible: boolean;
 };
 
@@ -31,15 +30,14 @@ export function ControllerOverlay({
   preset,
   controller,
   opacity,
-  scale,
   debugVisible
 }: ControllerOverlayProps) {
   const [loadedPreset, setLoadedPreset] = useState<LoadedOverlayPreset | null>(
     null
   );
   const [error, setError] = useState<string | null>(null);
-  const stageRef = useRef<HTMLDivElement | null>(null);
-  const [stageScale, setStageScale] = useState(1);
+  const fitRef = useRef<HTMLDivElement | null>(null);
+  const [box, setBox] = useState({ width: 0, height: 0 });
 
   useEffect(() => {
     let disposed = false;
@@ -85,19 +83,21 @@ export function ControllerOverlay({
   }, [preset]);
 
   useEffect(() => {
-    const node = stageRef.current;
+    const node = fitRef.current;
     if (!node || !loadedPreset) {
       return;
     }
 
     const resizeObserver = new ResizeObserver(([entry]) => {
-      const width = entry.contentRect.width;
-      setStageScale((width / loadedPreset.overlayWidth) * scale);
+      setBox({
+        width: entry.contentRect.width,
+        height: entry.contentRect.height
+      });
     });
 
     resizeObserver.observe(node);
     return () => resizeObserver.disconnect();
-  }, [loadedPreset, scale]);
+  }, [loadedPreset]);
 
   const elements = useMemo(() => {
     if (!loadedPreset) {
@@ -118,19 +118,23 @@ export function ControllerOverlay({
     return <div className="state-panel">Loading preset</div>;
   }
 
+  const aspect = loadedPreset.overlayWidth / loadedPreset.overlayHeight;
+  const availableWidth = box.width || loadedPreset.overlayWidth;
+  const availableHeight = box.height || loadedPreset.overlayHeight;
+  const renderedWidth = Math.max(
+    1,
+    Math.min(loadedPreset.overlayWidth, availableWidth, availableHeight * aspect)
+  );
+  const renderedHeight = renderedWidth / aspect;
+  const stageScale = renderedWidth / loadedPreset.overlayWidth;
+
   return (
-    <div
-      className="overlay-shell"
-      style={{
-        opacity,
-        maxWidth: `${loadedPreset.overlayWidth * scale}px`
-      }}
-    >
+    <div className="overlay-shell" ref={fitRef} style={{ opacity }}>
       <div
         className="overlay-stage-viewport"
-        ref={stageRef}
         style={{
-          aspectRatio: `${loadedPreset.overlayWidth} / ${loadedPreset.overlayHeight}`
+          width: `${renderedWidth}px`,
+          height: `${renderedHeight}px`
         }}
       >
         <div

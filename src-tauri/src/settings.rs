@@ -20,11 +20,12 @@ pub struct AppSettings {
 pub struct OverlaySettings {
     pub selected_preset_id: Option<String>,
     pub opacity: f32,
-    pub scale: f32,
     pub click_through: bool,
     pub lock_position: bool,
     pub hide_toolbar_when_idle: bool,
     pub toolbar_idle_ms: u64,
+    #[serde(default)]
+    pub obs_mode: bool,
     pub window: WindowSettings,
 }
 
@@ -74,11 +75,11 @@ impl Default for AppSettings {
             overlay: OverlaySettings {
                 selected_preset_id: None,
                 opacity: 0.92,
-                scale: 0.82,
                 click_through: false,
                 lock_position: false,
                 hide_toolbar_when_idle: false,
                 toolbar_idle_ms: 1800,
+                obs_mode: false,
                 window: WindowSettings {
                     x: None,
                     y: None,
@@ -147,7 +148,6 @@ fn settings_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 pub fn sanitize(settings: &mut AppSettings) {
     settings.overlay.opacity = settings.overlay.opacity.clamp(0.25, 1.0);
-    settings.overlay.scale = settings.overlay.scale.clamp(0.45, 1.2);
     settings.overlay.toolbar_idle_ms = settings.overlay.toolbar_idle_ms.clamp(600, 8_000);
     settings.overlay.window.width = settings.overlay.window.width.clamp(420, 2560);
     settings.overlay.window.height = settings.overlay.window.height.clamp(260, 1440);
@@ -167,14 +167,12 @@ mod tests {
     fn sanitize_clamps_user_editable_ranges() {
         let mut settings = AppSettings::default();
         settings.overlay.opacity = 2.0;
-        settings.overlay.scale = 0.1;
         settings.input.left_stick_deadzone = 1.0;
         settings.input.trigger_sensitivity = 5.0;
 
         sanitize(&mut settings);
 
         assert_eq!(settings.overlay.opacity, 1.0);
-        assert_eq!(settings.overlay.scale, 0.45);
         assert_eq!(settings.input.left_stick_deadzone, 0.4);
         assert_eq!(settings.input.trigger_sensitivity, 2.5);
     }

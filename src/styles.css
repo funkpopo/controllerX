@@ -35,28 +35,36 @@ textarea {
   height: 100vh;
   display: grid;
   grid-template-rows: auto 1fr auto;
-  background: transparent;
+  background: rgba(18, 24, 28, 0.92);
 }
 
 .toolbar {
-  height: 42px;
+  position: relative;
+  z-index: 70;
+  min-height: 42px;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 8px;
+  gap: 6px 8px;
   padding: 6px 8px;
   color: #ecf6f7;
   background: rgba(16, 21, 24, 0.62);
   border-bottom: 1px solid rgba(226, 242, 243, 0.12);
   backdrop-filter: blur(18px);
+  cursor: grab;
   user-select: none;
   transition:
     opacity 140ms ease,
     transform 140ms ease;
 }
 
+.toolbar:active {
+  cursor: grabbing;
+}
+
 .toolbar-hidden .toolbar {
   opacity: 0;
-  transform: translateY(-42px);
+  transform: translateY(-100%);
   pointer-events: none;
 }
 
@@ -101,10 +109,6 @@ textarea {
 
 .icon-button:active {
   transform: translateY(1px);
-}
-
-.drag-handle {
-  cursor: grab;
 }
 
 .device-status {
@@ -154,49 +158,291 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 7px;
   outline: none;
+  padding: 0 6px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
 }
 
-.range-control {
-  height: 30px;
+.preset-select:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.preset-select:focus {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(125, 222, 223, 0.5);
+}
+
+.preset-select option {
+  background: rgba(18, 24, 28, 0.98);
+  color: #eef7f8;
+  padding: 6px 8px;
+}
+
+.adjust {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.adjust-popover {
+  position: fixed;
+  top: auto;
+  bottom: auto;
+  left: auto;
+  right: 10px;
+  z-index: 60;
+  width: min(290px, calc(100vw - 20px));
+  max-height: min(400px, calc(100vh - 80px));
+  display: grid;
+  gap: 16px;
+  padding: 16px;
+  color: rgba(244, 250, 250, 0.92);
+  background: rgba(13, 17, 19, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 10px;
+  backdrop-filter: blur(18px);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.42);
+  overflow-y: auto;
+  margin-top: 50px;
+}
+
+.adjust-field {
+  display: grid;
+  gap: 10px;
+}
+
+.adjust-field-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  flex: 0 0 112px;
-  padding: 0 8px;
-  color: rgba(239, 249, 250, 0.86);
-  background: rgba(255, 255, 255, 0.07);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 7px;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 2px;
 }
 
-.range-control input {
+.adjust-field-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: rgba(236, 246, 247, 0.86);
+  font-size: 13px;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.adjust-field-value {
+  color: #7ddedf;
+  font-size: 14px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.adjust-field-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.adjust-stepper {
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  color: #edf9fa;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  cursor: pointer;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    transform 80ms ease;
+}
+
+.adjust-stepper:hover:not(:disabled) {
+  background: rgba(125, 222, 223, 0.18);
+  border-color: rgba(125, 222, 223, 0.35);
+}
+
+.adjust-stepper:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.adjust-stepper:disabled {
+  cursor: default;
+  opacity: 0.35;
+}
+
+.adjust-slider {
+  flex: 1 1 auto;
   min-width: 0;
-  width: 72px;
-  accent-color: #7ddedf;
+  height: 32px;
+  margin: 0;
+  appearance: none;
+  -webkit-appearance: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.adjust-slider::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 99px;
+  background: linear-gradient(
+    to right,
+    #7ddedf 0,
+    #7ddedf var(--fill, 0%),
+    rgba(255, 255, 255, 0.16) var(--fill, 0%),
+    rgba(255, 255, 255, 0.16) 100%
+  );
+  transition: height 120ms ease;
+}
+
+.adjust-slider:hover::-webkit-slider-runnable-track {
+  height: 10px;
+}
+
+.adjust-slider::-moz-range-track {
+  height: 8px;
+  border-radius: 99px;
+  background: rgba(255, 255, 255, 0.16);
+  transition: height 120ms ease;
+}
+
+.adjust-slider:hover::-moz-range-track {
+  height: 10px;
+}
+
+.adjust-slider::-moz-range-progress {
+  height: 8px;
+  border-radius: 99px;
+  background: #7ddedf;
+  transition: height 120ms ease;
+}
+
+.adjust-slider:hover::-moz-range-progress {
+  height: 10px;
+}
+
+.adjust-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 20px;
+  height: 20px;
+  margin-top: -6px;
+  border-radius: 50%;
+  background: #f3fbfb;
+  border: 2px solid #7ddedf;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  cursor: grab;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.adjust-slider:hover::-webkit-slider-thumb {
+  margin-top: -5px;
+  transform: scale(1.1);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.5);
+}
+
+.adjust-slider:active::-webkit-slider-thumb {
+  cursor: grabbing;
+  transform: scale(1.05);
+}
+
+.adjust-slider::-moz-range-thumb {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: #f3fbfb;
+  border: 2px solid #7ddedf;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+  cursor: grab;
+  transition:
+    transform 120ms ease,
+    box-shadow 120ms ease;
+}
+
+.adjust-slider:hover::-moz-range-thumb {
+  transform: scale(1.1);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.5);
+}
+
+.adjust-slider:active::-moz-range-thumb {
+  cursor: grabbing;
+  transform: scale(1.05);
+}
+
+.adjust-slider:focus-visible {
+  outline: none;
+}
+
+.adjust-slider:focus-visible::-webkit-slider-thumb {
+  box-shadow:
+    0 0 0 4px rgba(125, 222, 223, 0.32),
+    0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.adjust-slider:focus-visible::-moz-range-thumb {
+  box-shadow:
+    0 0 0 4px rgba(125, 222, 223, 0.32),
+    0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
+.adjust-reset {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 34px;
+  padding: 0 12px;
+  color: rgba(236, 246, 247, 0.86);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 7px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition:
+    background 120ms ease,
+    border-color 120ms ease,
+    transform 80ms ease;
+}
+
+.adjust-reset:hover {
+  background: rgba(125, 222, 223, 0.18);
+  border-color: rgba(125, 222, 223, 0.35);
+}
+
+.adjust-reset:active {
+  transform: scale(0.98);
 }
 
 .overlay-workspace {
   position: relative;
   min-width: 0;
-  min-height: 0;
+  min-height: 200px;
   display: grid;
   place-items: center;
-  padding: 10px;
+  padding: clamp(4px, 1.5vw, 10px);
   background: transparent;
+  overflow: hidden;
 }
 
 .overlay-shell {
-  width: min(100%, 980px);
-  filter: drop-shadow(0 18px 22px rgba(0, 0, 0, 0.38));
-  transition:
-    opacity 120ms ease,
-    max-width 160ms ease;
+  position: absolute;
+  inset: clamp(4px, 1.5vw, 8px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 120ms ease;
 }
 
 .overlay-stage-viewport {
   position: relative;
-  width: 100%;
   overflow: visible;
+  filter: drop-shadow(0 18px 22px rgba(0, 0, 0, 0.38));
 }
 
 .overlay-stage {
@@ -423,6 +669,26 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.12);
   border-radius: 6px;
   outline: none;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.verification-config select:hover,
+.verification-config input:hover {
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.verification-config select:focus,
+.verification-config input:focus,
+.verification-notes textarea:focus {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(125, 222, 223, 0.4);
+}
+
+.verification-config select option {
+  background: rgba(18, 24, 28, 0.98);
+  color: rgba(244, 250, 250, 0.92);
+  padding: 6px 8px;
 }
 
 .verification-config select,
@@ -708,10 +974,10 @@ textarea {
 .settings-dock {
   min-width: 0;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   gap: 7px;
   padding: 7px 8px;
-  overflow-x: auto;
   color: rgba(243, 249, 249, 0.9);
   background: rgba(16, 21, 24, 0.62);
   border-top: 1px solid rgba(226, 242, 243, 0.12);
@@ -767,6 +1033,25 @@ textarea {
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: 7px;
   outline: none;
+  padding: 0 6px;
+  cursor: pointer;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+
+.dock-select:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+
+.dock-select:focus {
+  background: rgba(255, 255, 255, 0.11);
+  border-color: rgba(125, 222, 223, 0.5);
+}
+
+.dock-select option {
+  background: rgba(18, 24, 28, 0.98);
+  color: #eef7f8;
+  padding: 6px 8px;
 }
 
 .dock-select.compact {
@@ -796,6 +1081,26 @@ textarea {
 
 .click-through-active .overlay-workspace {
   padding: 0;
+  min-height: 100vh;
+}
+
+.click-through-active .overlay-shell {
+  inset: 0;
+}
+
+.obs-mode-active {
+  grid-template-rows: 1fr;
+  background: transparent;
+}
+
+.obs-mode-active .overlay-workspace {
+  padding: 0;
+  min-height: 100vh;
+  background: transparent;
+}
+
+.obs-mode-active .overlay-shell {
+  inset: 0;
 }
 
 .click-through-badge {
@@ -817,14 +1122,6 @@ textarea {
 @media (max-width: 620px) {
   .toolbar {
     gap: 6px;
-  }
-
-  .range-control {
-    flex-basis: 84px;
-  }
-
-  .range-control input {
-    width: 46px;
   }
 
   .preset-select {
@@ -854,5 +1151,75 @@ textarea {
 
   .settings-dock {
     gap: 6px;
+  }
+
+  .adjust-popover {
+    width: calc(100vw - 16px);
+    left: 8px;
+    right: 8px;
+    margin-top: 50px;
+  }
+
+  .overlay-workspace {
+    min-height: 180px;
+  }
+}
+
+@media (max-width: 480px) {
+  .toolbar {
+    gap: 5px;
+    padding: 5px 6px;
+  }
+
+  .icon-button {
+    width: 28px;
+    height: 28px;
+  }
+
+  .device-status {
+    flex: 0 1 auto;
+    min-width: 80px;
+  }
+
+  .status-text {
+    font-size: 11px;
+  }
+
+  .preset-select {
+    width: 80px;
+    flex-basis: 80px;
+    font-size: 11px;
+  }
+
+  .adjust-popover {
+    gap: 14px;
+    padding: 14px;
+  }
+
+  .adjust-field-label {
+    font-size: 12px;
+  }
+
+  .adjust-field-value {
+    font-size: 13px;
+  }
+
+  .overlay-workspace {
+    min-height: 160px;
+  }
+}
+
+@media (max-height: 360px) {
+  .toolbar {
+    min-height: 38px;
+    padding: 5px 6px;
+  }
+
+  .overlay-workspace {
+    min-height: 140px;
+  }
+
+  .settings-dock {
+    padding: 6px;
   }
 }

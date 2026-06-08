@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
 import type { AppSettings, ProfileInfo } from "../types/controller";
 
@@ -28,8 +29,20 @@ export function useAppSettings() {
         }
       });
 
+    // Listen for settings updates from the tray menu
+    const unlistenPromise = listen<AppSettings>("settings-updated", (event) => {
+      if (!disposed) {
+        setState((current) =>
+          current.kind === "ready"
+            ? { ...current, settings: event.payload }
+            : current
+        );
+      }
+    });
+
     return () => {
       disposed = true;
+      void unlistenPromise.then((unlisten) => unlisten());
     };
   }, []);
 

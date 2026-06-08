@@ -144,6 +144,7 @@ export type OverlaySettings = {
   lockPosition: boolean;
   hideToolbarWhenIdle: boolean;
   toolbarIdleMs: number;
+  obsMode: boolean;
   window: WindowSettings;
 };
 
