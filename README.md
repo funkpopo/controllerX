@@ -16,12 +16,6 @@ controllerX shows a floating gamepad on your desktop and updates it as you press
 - Shows a clear message when a controller or visual preset is not supported.
 - Includes simulation, debug, and hardware verification tools for development and testing.
 
-## Current Limitations
-
-- DualShock 4 input matching is implemented, but a DualShock 4 visual preset is not currently available in the bundled assets. The app will show a no-visual-preset message for DS4. See `docs/ds4-asset-status.md`.
-- Some controller calibration and hot-plug checks need real hardware testing. See `docs/verification.md`.
-- Local Windows installer builds are unsigned unless you provide a code-signing certificate. See `docs/release.md`.
-
 ## Requirements
 
 - Windows for the current desktop overlay workflow.
