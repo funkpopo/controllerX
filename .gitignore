@@ -39,3 +39,5 @@ docs/
 third_party/
 
 todo.md
+
+.claude/
