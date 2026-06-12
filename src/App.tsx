@@ -7,13 +7,14 @@ import {
   Lock,
   MousePointer2,
   PanelTopClose,
-  Unlock
+  Unlock,
+  X
 } from "lucide-react";
-import { useEffect, useMemo, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ControllerOverlay } from "./components/ControllerOverlay";
 import { DebugPanel } from "./components/DebugPanel";
 import { HardwareVerificationPanel } from "./components/HardwareVerificationPanel";
-import { OverlayAdjustments } from "./components/OverlayAdjustments";
+import { SettingsPopover } from "./components/SettingsPopover";
 import { StatePanel } from "./components/StatePanel";
 import { OVERLAY_PRESETS, selectPreset } from "./data/presets";
 import { useAppSettings } from "./hooks/useAppSettings";
@@ -23,11 +24,13 @@ import type {
   AppSettings,
   ControllerDeviceEvent,
   ControllerSnapshot,
-  ProfileInfo,
-  SimulationScenario
+  ProfileInfo
 } from "./types/controller";
 
 type OverlaySizeName = "compact" | "standard" | "large";
+
+const ERROR_TOAST_AUTO_DISMISS_MS = 6000;
+const POINTER_ACTIVITY_THROTTLE_MS = 400;
 
 function App() {
   const controller = useControllerState();
@@ -37,7 +40,7 @@ function App() {
   if (settingsApi.state.kind === "loading") {
     return (
       <main className="app">
-        <StatePanel controller={controller} message="Loading settings" />
+        <StatePanel controller={controller} message="正在加载设置" />
       </main>
     );
   }
@@ -47,7 +50,7 @@ function App() {
       <main className="app">
         <StatePanel
           controller={controller}
-          message={`Settings error: ${settingsApi.state.error}`}
+          message={`设置加载失败:${settingsApi.state.error}`}
         />
       </main>
     );
@@ -92,8 +95,9 @@ function ReadyApp({
   const [verificationVisible, setVerificationVisible] = useState(false);
   const [toolbarVisible, setToolbarVisible] = useState(true);
   const [toolbarActivity, setToolbarActivity] = useState(0);
-  const [adjustOpen, setAdjustOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [commandError, setCommandError] = useState<string | null>(null);
+  const lastPointerActivityRef = useRef(0);
 
   const preset = useMemo(() => {
     try {
@@ -113,7 +117,7 @@ function ReadyApp({
     if (
       !settings.overlay.hideToolbarWhenIdle ||
       settings.overlay.clickThrough ||
-      adjustOpen
+      settingsOpen
     ) {
       setToolbarVisible(true);
       return;
@@ -128,14 +132,13 @@ function ReadyApp({
     return () => window.clearTimeout(timeout);
   }, [
     toolbarActivity,
-    adjustOpen,
+    settingsOpen,
     settings.overlay.clickThrough,
     settings.overlay.hideToolbarWhenIdle,
     settings.overlay.toolbarIdleMs
   ]);
 
   const status = statusText(controller);
-  const activeError = commandError ?? preset.error;
 
   useEffect(() => {
     let disposed = false;
@@ -161,19 +164,29 @@ function ReadyApp({
     };
   }, []);
 
+  // Errors surface as a dismissible toast and never block the overlay; clear
+  // them automatically so a transient failure does not linger on screen.
+  useEffect(() => {
+    if (!commandError) {
+      return;
+    }
+
+    const timeout = window.setTimeout(
+      () => setCommandError(null),
+      ERROR_TOAST_AUTO_DISMISS_MS
+    );
+    return () => window.clearTimeout(timeout);
+  }, [commandError]);
+
   const update = (edit: (settings: AppSettings) => AppSettings) =>
-    updateSettings(edit)
-      .then(() => setCommandError(null))
-      .catch((error: unknown) => {
-        setCommandError(formatError(error));
-      });
+    updateSettings(edit).catch((error: unknown) => {
+      setCommandError(formatError(error));
+    });
 
   const runCommand = (command: Promise<void>) =>
-    command
-      .then(() => setCommandError(null))
-      .catch((error: unknown) => {
-        setCommandError(formatError(error));
-      });
+    command.catch((error: unknown) => {
+      setCommandError(formatError(error));
+    });
 
   useEffect(() => {
     if (settings.overlay.clickThrough) {
@@ -191,13 +204,6 @@ function ReadyApp({
   const toggleLockPosition = () =>
     runCommand(setLockPosition(!settings.overlay.lockPosition));
 
-  const setOpacity = (value: number) => {
-    void update((next) => {
-      next.overlay.opacity = value;
-      return next;
-    });
-  };
-
   const appClassName = [
     "app",
     showControls ? "" : "click-through-active",
@@ -212,13 +218,21 @@ function ReadyApp({
       className={appClassName}
       onPointerMove={() => {
         if (
-          settings.overlay.hideToolbarWhenIdle &&
-          !settings.overlay.clickThrough &&
-          !settings.overlay.obsMode
+          !settings.overlay.hideToolbarWhenIdle ||
+          settings.overlay.clickThrough ||
+          settings.overlay.obsMode
         ) {
-          setToolbarVisible(true);
-          setToolbarActivity((value) => value + 1);
+          return;
         }
+
+        const now = performance.now();
+        if (now - lastPointerActivityRef.current < POINTER_ACTIVITY_THROTTLE_MS) {
+          return;
+        }
+
+        lastPointerActivityRef.current = now;
+        setToolbarVisible(true);
+        setToolbarActivity((value) => value + 1);
       }}
     >
       {showControls ? (
@@ -239,6 +253,9 @@ function ReadyApp({
         >
           <div className="device-status" title={status}>
             <span className={`status-dot status-${controller.status}`} />
+            {controller.status === "simulated" ? (
+              <span className="status-chip">模拟</span>
+            ) : null}
             <span className="status-text">{status}</span>
           </div>
 
@@ -251,9 +268,9 @@ function ReadyApp({
                 return next;
               })
             }
-            title="预设"
+            title="视觉预设"
           >
-            <option value="">Auto profile</option>
+            <option value="">自动匹配</option>
             {OVERLAY_PRESETS.map((overlayPreset) => (
               <option key={overlayPreset.id} value={overlayPreset.id}>
                 {overlayPreset.label}
@@ -261,17 +278,19 @@ function ReadyApp({
             ))}
           </select>
 
-          <OverlayAdjustments
-            opacity={settings.overlay.opacity}
-            onOpacityChange={setOpacity}
-            open={adjustOpen}
-            onOpenChange={setAdjustOpen}
+          <SettingsPopover
+            settings={settings}
+            profiles={profiles}
+            open={settingsOpen}
+            onOpenChange={setSettingsOpen}
+            onUpdate={(edit) => void update(edit)}
+            onSetSize={(size) => runCommand(setOverlaySize(size))}
           />
 
           <button
             className={`icon-button ${settings.overlay.clickThrough ? "active" : ""}`}
             aria-label="鼠标穿透"
-            title="鼠标穿透"
+            title="鼠标穿透(开启后通过托盘菜单恢复)"
             onClick={toggleClickThrough}
           >
             <MousePointer2 size={16} />
@@ -321,10 +340,10 @@ function ReadyApp({
       ) : null}
 
       <section className="overlay-workspace">
-        {activeError && showOverlayMessages ? (
-          <StatePanel controller={controller} message={activeError} />
+        {preset.error && showOverlayMessages ? (
+          <StatePanel controller={controller} message={`预设不可用:${preset.error}`} />
         ) : null}
-        {!activeError && preset.value ? (
+        {preset.value ? (
           <ControllerOverlay
             controller={controller}
             preset={preset.value}
@@ -332,7 +351,7 @@ function ReadyApp({
             debugVisible={debugVisible}
           />
         ) : null}
-        {!activeError && !preset.value && showOverlayMessages ? (
+        {!preset.error && !preset.value && showOverlayMessages ? (
           <StatePanel controller={controller} />
         ) : null}
         {debugVisible && showControls ? (
@@ -349,19 +368,23 @@ function ReadyApp({
         ) : null}
       </section>
 
-      {showControls ? (
-        <SettingsDock
-          settings={settings}
-          profiles={profiles}
-          onUpdate={update}
-          setOverlaySize={setOverlaySize}
-          setCommandError={setCommandError}
-        />
+      {commandError && showOverlayMessages ? (
+        <div className="app-toast" role="alert">
+          <span className="app-toast-message">{commandError}</span>
+          <button
+            type="button"
+            className="app-toast-close"
+            aria-label="关闭错误提示"
+            onClick={() => setCommandError(null)}
+          >
+            <X size={14} />
+          </button>
+        </div>
       ) : null}
 
       {settings.overlay.clickThrough && !settings.overlay.obsMode ? (
         <div className="click-through-badge" aria-hidden="true">
-          Click-through
+          鼠标穿透中 · 通过托盘菜单恢复
         </div>
       ) : null}
     </main>
@@ -370,18 +393,18 @@ function ReadyApp({
 
 function statusText(controller: ControllerSnapshot) {
   if (controller.status === "simulated") {
-    return controller.name ?? "Simulated controller";
+    return controller.name ?? "模拟手柄";
   }
 
   if (controller.status === "unsupported") {
-    return controller.name ? `Unsupported: ${controller.name}` : "Unsupported controller";
+    return controller.name ? `不支持:${controller.name}` : "不支持的手柄";
   }
 
   if (controller.connected) {
-    return controller.name ?? controller.profile?.displayName ?? "Controller";
+    return controller.name ?? controller.profile?.displayName ?? "手柄";
   }
 
-  return "No controller";
+  return "未连接手柄";
 }
 
 function formatError(error: unknown) {
@@ -396,225 +419,6 @@ function isInteractiveToolbarTarget(target: EventTarget | null) {
         "button, select, input, textarea, label, [role='dialog'], .adjust-popover"
       )
     )
-  );
-}
-
-function updateNumber(
-  onUpdate: (edit: (settings: AppSettings) => AppSettings) => void,
-  edit: (settings: AppSettings, value: number) => void
-) {
-  return (event: ChangeEvent<HTMLInputElement>) => {
-    const value = Number(event.target.value);
-    onUpdate((next) => {
-      edit(next, value);
-      return next;
-    });
-  };
-}
-
-function SettingsDock({
-  settings,
-  profiles,
-  onUpdate,
-  setOverlaySize,
-  setCommandError
-}: {
-  settings: AppSettings;
-  profiles: ProfileInfo[];
-  onUpdate: (edit: (settings: AppSettings) => AppSettings) => void;
-  setOverlaySize: (size: OverlaySizeName) => Promise<void>;
-  setCommandError: (error: string | null) => void;
-}) {
-  const runSizeCommand = (size: OverlaySizeName) =>
-    setOverlaySize(size)
-      .then(() => setCommandError(null))
-      .catch((error: unknown) => setCommandError(formatError(error)));
-
-  return (
-    <div className="settings-dock">
-      <label className="dock-check">
-        <span>Sim</span>
-        <input
-          type="checkbox"
-          checked={settings.simulation.enabled}
-          onChange={(event) =>
-            onUpdate((next) => {
-              next.simulation.enabled = event.target.checked;
-              return next;
-            })
-          }
-        />
-      </label>
-      <select
-        className="dock-select"
-        value={settings.simulation.profileId}
-        onChange={(event) =>
-          onUpdate((next) => {
-            next.simulation.profileId = event.target.value;
-            return next;
-          })
-        }
-      >
-        {profiles.map((profile) => (
-          <option key={profile.id} value={profile.id}>
-            {profile.displayName}
-          </option>
-        ))}
-      </select>
-      <select
-        className="dock-select compact"
-        value={settings.simulation.scenario}
-        onChange={(event) =>
-          onUpdate((next) => {
-            next.simulation.scenario = event.target.value as SimulationScenario;
-            return next;
-          })
-        }
-      >
-        <option value="sweep">Sweep</option>
-        <option value="buttons">Buttons</option>
-        <option value="triggers">Triggers</option>
-        <option value="hotPlug">Hot plug</option>
-      </select>
-      <label className="dock-number">
-        <span>L DZ</span>
-        <input
-          type="number"
-          min="0"
-          max="0.4"
-          step="0.01"
-          value={settings.input.leftStickDeadzone}
-          onChange={updateNumber(onUpdate, (next, value) => {
-            next.input.leftStickDeadzone = value;
-          })}
-        />
-      </label>
-      <label className="dock-number">
-        <span>R DZ</span>
-        <input
-          type="number"
-          min="0"
-          max="0.4"
-          step="0.01"
-          value={settings.input.rightStickDeadzone}
-          onChange={updateNumber(onUpdate, (next, value) => {
-            next.input.rightStickDeadzone = value;
-          })}
-        />
-      </label>
-      <label className="dock-number">
-        <span>T DZ</span>
-        <input
-          type="number"
-          min="0"
-          max="0.4"
-          step="0.01"
-          value={settings.input.triggerDeadzone}
-          onChange={updateNumber(onUpdate, (next, value) => {
-            next.input.triggerDeadzone = value;
-          })}
-        />
-      </label>
-      <label className="dock-number">
-        <span>Stick</span>
-        <input
-          type="number"
-          min="0.25"
-          max="2.5"
-          step="0.05"
-          value={settings.input.stickSensitivity}
-          onChange={updateNumber(onUpdate, (next, value) => {
-            next.input.stickSensitivity = value;
-          })}
-        />
-      </label>
-      <label className="dock-number">
-        <span>Trig</span>
-        <input
-          type="number"
-          min="0.25"
-          max="2.5"
-          step="0.05"
-          value={settings.input.triggerSensitivity}
-          onChange={updateNumber(onUpdate, (next, value) => {
-            next.input.triggerSensitivity = value;
-          })}
-        />
-      </label>
-      <label className="dock-number">
-        <span>Idle</span>
-        <input
-          type="number"
-          min="600"
-          max="8000"
-          step="100"
-          value={settings.overlay.toolbarIdleMs}
-          onChange={updateNumber(onUpdate, (next, value) => {
-            next.overlay.toolbarIdleMs = value;
-          })}
-        />
-      </label>
-      <label className="dock-check">
-        <span>L-Y</span>
-        <input
-          type="checkbox"
-          checked={settings.input.invertLeftY}
-          onChange={(event) =>
-            onUpdate((next) => {
-              next.input.invertLeftY = event.target.checked;
-              return next;
-            })
-          }
-        />
-      </label>
-      <label className="dock-check">
-        <span>R-Y</span>
-        <input
-          type="checkbox"
-          checked={settings.input.invertRightY}
-          onChange={(event) =>
-            onUpdate((next) => {
-              next.input.invertRightY = event.target.checked;
-              return next;
-            })
-          }
-        />
-      </label>
-      <label className="dock-check">
-        <span>D-Y</span>
-        <input
-          type="checkbox"
-          checked={settings.input.invertDpadY}
-          onChange={(event) =>
-            onUpdate((next) => {
-              next.input.invertDpadY = event.target.checked;
-              return next;
-            })
-          }
-        />
-      </label>
-      <button
-        className="dock-button"
-        type="button"
-        onClick={() => void runSizeCommand("compact")}
-      >
-        520
-      </button>
-      <button
-        className="dock-button"
-        type="button"
-        onClick={() => void runSizeCommand("standard")}
-      >
-        720
-      </button>
-      <button
-        className="dock-button"
-        type="button"
-        onClick={() => void runSizeCommand("large")}
-      >
-        980
-      </button>
-    </div>
   );
 }
 

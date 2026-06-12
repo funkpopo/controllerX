@@ -7,7 +7,7 @@ type StatePanelProps = {
 
 export function StatePanel({ controller, message }: StatePanelProps) {
   const title = message ?? stateTitle(controller);
-  const details = stateDetails(controller);
+  const details = message ? null : stateDetails(controller);
 
   return (
     <div className="state-panel">
@@ -19,21 +19,25 @@ export function StatePanel({ controller, message }: StatePanelProps) {
 
 function stateTitle(controller: ControllerSnapshot) {
   if (controller.status === "noDevice") {
-    return "No controller connected";
+    return "未连接手柄";
   }
 
   if (controller.status === "unsupported") {
-    return "Unsupported controller";
+    return "不支持的手柄";
   }
 
   if (controller.profile && !controller.profile.presetId) {
-    return "Profile has no visual preset";
+    return "该手柄没有可用的视觉预设";
   }
 
-  return "Controller state unavailable";
+  return "手柄状态不可用";
 }
 
 function stateDetails(controller: ControllerSnapshot) {
+  if (controller.status === "noDevice") {
+    return "请连接手柄;或打开工具栏的“叠加层设置”,在“模拟”中开启模拟数据预览效果。";
+  }
+
   if (controller.unsupported) {
     return controller.unsupported.reason;
   }
@@ -44,4 +48,3 @@ function stateDetails(controller: ControllerSnapshot) {
 
   return controller.name ?? "";
 }
-

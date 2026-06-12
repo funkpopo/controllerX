@@ -7,7 +7,7 @@ export const OVERLAY_PRESETS: OverlayPreset[] = [
     id: "xbox-controller",
     label: "Xbox",
     family: "xbox",
-    profileIds: ["xbox-360", "xbox-series", "generic-xinput"],
+    profileIds: ["xbox-360", "xbox-series", "generic-xinput", "generic-gamepad"],
     image: `${INPUT_OVERLAY_ROOT}/xbox-controller/xbox-controller.png`,
     config: `${INPUT_OVERLAY_ROOT}/xbox-controller/xbox-controller.json`,
     source: "input-overlay/presets/xbox-controller"
@@ -25,7 +25,7 @@ export const OVERLAY_PRESETS: OverlayPreset[] = [
     id: "dualsense",
     label: "DualSense",
     family: "playStation",
-    profileIds: ["dualsense"],
+    profileIds: ["dualsense", "dualshock-4"],
     image: `${INPUT_OVERLAY_ROOT}/dualsense/dualsense.png`,
     config: `${INPUT_OVERLAY_ROOT}/dualsense/dualsense.json`,
     source: "input-overlay/presets/dualsense"

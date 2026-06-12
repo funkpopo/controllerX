@@ -10,6 +10,7 @@ pub enum ControllerFamily {
     Xbox,
     PlayStation,
     XInput,
+    Generic,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -22,6 +23,7 @@ pub enum ProfileId {
     DualShock4,
     DualSense,
     GenericXInput,
+    GenericGamepad,
 }
 
 impl ProfileId {
@@ -34,6 +36,7 @@ impl ProfileId {
             ProfileId::DualShock4 => "dualshock-4",
             ProfileId::DualSense => "dualsense",
             ProfileId::GenericXInput => "generic-xinput",
+            ProfileId::GenericGamepad => "generic-gamepad",
         }
     }
 
@@ -46,6 +49,7 @@ impl ProfileId {
             "dualshock-4" => Some(ProfileId::DualShock4),
             "dualsense" => Some(ProfileId::DualSense),
             "generic-xinput" => Some(ProfileId::GenericXInput),
+            "generic-gamepad" => Some(ProfileId::GenericGamepad),
             _ => None,
         }
     }
@@ -55,9 +59,13 @@ impl ProfileId {
 #[serde(rename_all = "camelCase")]
 pub enum DeviceMatchKind {
     VendorProduct,
+    /// Known vendor, unknown product id; matched to the closest family profile.
+    VendorFamily,
     XInputName,
     XInputDriver,
     XInputApi,
+    /// Unknown device; best-effort standard mapping so the overlay still works.
+    GenericFallback,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -280,10 +288,17 @@ const NEEDS_DS4_ASSET: CalibrationStatus = CalibrationStatus {
     preset_calibrated: false,
     input_map_calibrated: true,
     hardware_verified: false,
-    notes: "DualShock 4 input profile exists, but no DualShock 4 PNG preset was found in input-overlay.",
+    notes: "DualShock 4 renders with the DualSense preset as a visual approximation; no dedicated DualShock 4 PNG preset was found in input-overlay.",
 };
 
-pub const PROFILE_CATALOG: [ControllerProfile; 7] = [
+const GENERIC_FALLBACK_STATUS: CalibrationStatus = CalibrationStatus {
+    preset_calibrated: false,
+    input_map_calibrated: false,
+    hardware_verified: false,
+    notes: "Unknown device matched by best-effort standard mapping with the Xbox preset; some inputs may be missing or misplaced.",
+};
+
+pub const PROFILE_CATALOG: [ControllerProfile; 8] = [
     ControllerProfile {
         id: ProfileId::Xbox360,
         display_name: "Xbox 360 Controller",
@@ -328,7 +343,8 @@ pub const PROFILE_CATALOG: [ControllerProfile; 7] = [
         id: ProfileId::DualShock4,
         display_name: "DualShock 4",
         family: ControllerFamily::PlayStation,
-        preset_id: None,
+        // Visual approximation until a dedicated DualShock 4 asset is sourced.
+        preset_id: Some("dualsense"),
         match_kind: DeviceMatchKind::VendorProduct,
         input_map: DUALSHOCK4_MAP,
         transform: STANDARD_TRANSFORM,
@@ -354,9 +370,19 @@ pub const PROFILE_CATALOG: [ControllerProfile; 7] = [
         transform: STANDARD_TRANSFORM,
         calibration_status: CALIBRATED_WITH_INCLUDED_PRESET,
     },
+    ControllerProfile {
+        id: ProfileId::GenericGamepad,
+        display_name: "Generic Gamepad (best effort)",
+        family: ControllerFamily::Generic,
+        preset_id: Some("xbox-controller"),
+        match_kind: DeviceMatchKind::GenericFallback,
+        input_map: STANDARD_MAP,
+        transform: STANDARD_TRANSFORM,
+        calibration_status: GENERIC_FALLBACK_STATUS,
+    },
 ];
 
-const VENDOR_PRODUCT_PROFILES: [VendorProductProfile; 15] = [
+const VENDOR_PRODUCT_PROFILES: [VendorProductProfile; 19] = [
     VendorProductProfile {
         vendor_id: 0x045e,
         product_id: 0x028e,
@@ -406,6 +432,30 @@ const VENDOR_PRODUCT_PROFILES: [VendorProductProfile; 15] = [
         input_map: STANDARD_MAP,
         transform: STANDARD_TRANSFORM,
     },
+    // Xbox One S over Bluetooth (older firmware).
+    VendorProductProfile {
+        vendor_id: 0x045e,
+        product_id: 0x02e0,
+        profile_id: ProfileId::XboxOne,
+        input_map: STANDARD_MAP,
+        transform: STANDARD_TRANSFORM,
+    },
+    // Xbox Elite Series 2 over USB.
+    VendorProductProfile {
+        vendor_id: 0x045e,
+        product_id: 0x0b00,
+        profile_id: ProfileId::XboxOne,
+        input_map: STANDARD_MAP,
+        transform: STANDARD_TRANSFORM,
+    },
+    // Xbox Elite Series 2 over Bluetooth.
+    VendorProductProfile {
+        vendor_id: 0x045e,
+        product_id: 0x0b05,
+        profile_id: ProfileId::XboxOne,
+        input_map: STANDARD_MAP,
+        transform: STANDARD_TRANSFORM,
+    },
     VendorProductProfile {
         vendor_id: 0x045e,
         product_id: 0x0b12,
@@ -416,6 +466,14 @@ const VENDOR_PRODUCT_PROFILES: [VendorProductProfile; 15] = [
     VendorProductProfile {
         vendor_id: 0x045e,
         product_id: 0x0b13,
+        profile_id: ProfileId::XboxSeries,
+        input_map: STANDARD_MAP,
+        transform: STANDARD_TRANSFORM,
+    },
+    // Xbox Series over Bluetooth LE (newer firmware).
+    VendorProductProfile {
+        vendor_id: 0x045e,
+        product_id: 0x0b20,
         profile_id: ProfileId::XboxSeries,
         input_map: STANDARD_MAP,
         transform: STANDARD_TRANSFORM,
@@ -468,6 +526,9 @@ pub fn profile_catalog() -> Vec<ProfileInfo> {
     PROFILE_CATALOG.iter().map(profile_info).collect()
 }
 
+const VENDOR_SONY: u16 = 0x054c;
+const VENDOR_MICROSOFT: u16 = 0x045e;
+
 pub fn match_profile(identity: &DeviceIdentity) -> Result<ControllerProfile, UnsupportedDevice> {
     if let (Some(vendor_id), Some(product_id)) = (identity.vendor_id, identity.product_id) {
         if let Some(profile) = match_vendor_product(vendor_id, product_id) {
@@ -494,10 +555,27 @@ pub fn match_profile(identity: &DeviceIdentity) -> Result<ControllerProfile, Uns
         );
     }
 
-    Err(UnsupportedDevice {
-        reason: unsupported_reason(identity),
-        identity: identity.clone(),
-    })
+    // Known vendor with an unknown product id: fall back to the closest
+    // family profile so newer hardware still gets a sensible mapping.
+    match identity.vendor_id {
+        Some(VENDOR_SONY) => {
+            return profile_by_id_with_match_kind(
+                ProfileId::DualShock4,
+                DeviceMatchKind::VendorFamily,
+            );
+        }
+        Some(VENDOR_MICROSOFT) => {
+            return profile_by_id_with_match_kind(
+                ProfileId::XboxSeries,
+                DeviceMatchKind::VendorFamily,
+            );
+        }
+        _ => {}
+    }
+
+    // The device was still reported as a gamepad by gilrs, so read it with the
+    // best-effort standard mapping instead of rejecting it outright.
+    profile_by_id_with_match_kind(ProfileId::GenericGamepad, DeviceMatchKind::GenericFallback)
 }
 
 pub fn profile_by_id(profile_id: ProfileId) -> Result<ControllerProfile, UnsupportedDevice> {
@@ -567,16 +645,6 @@ fn match_vendor_product(vendor_id: u16, product_id: u16) -> Option<ControllerPro
             profile.transform = variant.transform;
             Some(profile)
         })
-}
-
-fn unsupported_reason(identity: &DeviceIdentity) -> String {
-    match (identity.vendor_id, identity.product_id) {
-        (Some(vendor), Some(product)) => format!(
-            "No explicit controller profile for vendor 0x{vendor:04x}, product 0x{product:04x}, and no verified XInput/XUSB driver evidence was found."
-        ),
-        _ => "No vendor/product ID was exposed and no explicit XInput name or XInput/XUSB driver evidence was found."
-            .to_string(),
-    }
 }
 
 fn format_uuid(bytes: [u8; 16]) -> String {
@@ -684,10 +752,33 @@ mod tests {
     }
 
     #[test]
-    fn unsupported_profile_is_explicit_error() {
-        let error = match_profile(&identity(Some(0x1234), Some(0xabcd), "Unknown")).unwrap_err();
-        assert!(error.reason.contains("0x1234"));
-        assert!(error.reason.contains("0xabcd"));
-        assert!(error.reason.contains("XInput/XUSB driver evidence"));
+    fn unknown_device_falls_back_to_generic_gamepad() {
+        let profile = match_profile(&identity(Some(0x1234), Some(0xabcd), "Unknown")).unwrap();
+        assert_eq!(profile.id, ProfileId::GenericGamepad);
+        assert_eq!(profile.match_kind, DeviceMatchKind::GenericFallback);
+        assert_eq!(profile.preset_id, Some("xbox-controller"));
+        assert!(!profile.calibration_status.input_map_calibrated);
+    }
+
+    #[test]
+    fn unknown_sony_product_falls_back_to_dualshock4_family() {
+        let profile =
+            match_profile(&identity(Some(0x054c), Some(0x9999), "Wireless Controller")).unwrap();
+        assert_eq!(profile.id, ProfileId::DualShock4);
+        assert_eq!(profile.match_kind, DeviceMatchKind::VendorFamily);
+    }
+
+    #[test]
+    fn unknown_microsoft_product_falls_back_to_xbox_family() {
+        let profile = match_profile(&identity(Some(0x045e), Some(0x9999), "Controller")).unwrap();
+        assert_eq!(profile.id, ProfileId::XboxSeries);
+        assert_eq!(profile.match_kind, DeviceMatchKind::VendorFamily);
+    }
+
+    #[test]
+    fn dualshock4_uses_dualsense_preset_as_visual_approximation() {
+        let profile = match_profile(&identity(Some(0x054c), Some(0x09cc), "Controller")).unwrap();
+        assert_eq!(profile.preset_id, Some("dualsense"));
+        assert!(!profile.calibration_status.preset_calibrated);
     }
 }

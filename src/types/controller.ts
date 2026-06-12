@@ -1,4 +1,4 @@
-export type ControllerFamily = "xbox" | "playStation" | "xInput";
+export type ControllerFamily = "xbox" | "playStation" | "xInput" | "generic";
 export type ControllerStatus = "noDevice" | "active" | "unsupported" | "simulated";
 
 export type CalibrationStatus = {
@@ -36,7 +36,13 @@ export type ProfileInfo = {
   displayName: string;
   family: ControllerFamily;
   presetId: string | null;
-  matchKind: "vendorProduct" | "xInputName" | "xInputDriver" | "xInputApi";
+  matchKind:
+    | "vendorProduct"
+    | "vendorFamily"
+    | "xInputName"
+    | "xInputDriver"
+    | "xInputApi"
+    | "genericFallback";
   calibrationStatus: CalibrationStatus;
 };
 
@@ -139,7 +145,6 @@ export type WindowSettings = {
 export type OverlaySettings = {
   selectedPresetId: string | null;
   opacity: number;
-  scale: number;
   clickThrough: boolean;
   lockPosition: boolean;
   hideToolbarWhenIdle: boolean;

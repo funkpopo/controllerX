@@ -1,13 +1,17 @@
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
+use std::time::Duration;
 
 use tauri::{
-    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, Position, Size, WebviewWindow,
+    AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, Position, Size, WebviewWindow,
     WindowEvent,
 };
 
 use crate::settings::{self, AppSettings};
 
 pub const MAIN_WINDOW: &str = "main";
+
+/// How long the window must stay still before move/resize changes hit the disk.
+const WINDOW_SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
 
 #[derive(Clone, Copy, Debug)]
 pub enum OverlayWindowSize {
@@ -49,18 +53,23 @@ pub fn configure_main_window(
         .set_skip_taskbar(false)
         .map_err(|error| format!("Failed to keep taskbar entry: {error}"))?;
     apply_window_interaction_state(&window, &settings)?;
+
+    // Position is persisted in physical pixels and restored before the size so
+    // the logical size below resolves against the correct monitor's DPI.
+    if let (Some(x), Some(y)) = (settings.overlay.window.x, settings.overlay.window.y) {
+        if stored_position_is_visible(&window, x, y) {
+            window
+                .set_position(Position::Physical(PhysicalPosition::new(x, y)))
+                .map_err(|error| format!("Failed to restore window position: {error}"))?;
+        }
+    }
+
     window
         .set_size(Size::Logical(LogicalSize::new(
             settings.overlay.window.width as f64,
             settings.overlay.window.height as f64,
         )))
         .map_err(|error| format!("Failed to restore window size: {error}"))?;
-
-    if let (Some(x), Some(y)) = (settings.overlay.window.x, settings.overlay.window.y) {
-        window
-            .set_position(Position::Logical(LogicalPosition::new(x as f64, y as f64)))
-            .map_err(|error| format!("Failed to restore window position: {error}"))?;
-    }
 
     window
         .show()
@@ -168,12 +177,20 @@ pub fn update_settings(
     settings_state: &Arc<Mutex<AppSettings>>,
     edit: impl FnOnce(&mut AppSettings),
 ) -> Result<AppSettings, String> {
+    let snapshot = update_settings_in_memory(settings_state, edit)?;
+    settings::save(app, &snapshot)?;
+    Ok(snapshot)
+}
+
+fn update_settings_in_memory(
+    settings_state: &Arc<Mutex<AppSettings>>,
+    edit: impl FnOnce(&mut AppSettings),
+) -> Result<AppSettings, String> {
     let mut settings = settings_state
         .lock()
         .map_err(|_| "Settings lock is poisoned.".to_string())?;
     edit(&mut settings);
     settings::sanitize(&mut settings);
-    settings::save(app, &settings)?;
     Ok(settings.clone())
 }
 
@@ -193,12 +210,15 @@ pub fn replace_settings(
         )))
         .map_err(|error| format!("Failed to apply window size: {error}"))?;
 
-    let mut settings = settings_state
-        .lock()
-        .map_err(|_| "Settings lock is poisoned.".to_string())?;
-    *settings = next_settings;
-    settings::save(app, &settings)?;
-    Ok(settings.clone())
+    let snapshot = {
+        let mut settings = settings_state
+            .lock()
+            .map_err(|_| "Settings lock is poisoned.".to_string())?;
+        *settings = next_settings;
+        settings.clone()
+    };
+    settings::save(app, &snapshot)?;
+    Ok(snapshot)
 }
 
 fn attach_window_persistence(
@@ -206,25 +226,94 @@ fn attach_window_persistence(
     window: WebviewWindow,
     settings_state: Arc<Mutex<AppSettings>>,
 ) {
+    let save_trigger = spawn_debounced_settings_saver(app.clone(), settings_state.clone());
+    let event_window = window.clone();
     window.on_window_event(move |event| match event {
         WindowEvent::Moved(position) => {
-            if let Err(error) = update_settings(&app, &settings_state, |settings| {
+            let result = update_settings_in_memory(&settings_state, |settings| {
                 settings.overlay.window.x = Some(position.x);
                 settings.overlay.window.y = Some(position.y);
-            }) {
-                emit_command_error(&app, error);
+            });
+            match result {
+                Ok(_) => request_debounced_save(&app, &save_trigger),
+                Err(error) => emit_command_error(&app, error),
             }
         }
         WindowEvent::Resized(size) => {
-            if let Err(error) = update_settings(&app, &settings_state, |settings| {
-                settings.overlay.window.width = size.width;
-                settings.overlay.window.height = size.height;
-            }) {
-                emit_command_error(&app, error);
+            if size.width == 0 || size.height == 0 || event_window.is_minimized().unwrap_or(false) {
+                return;
+            }
+
+            let scale = event_window.scale_factor().unwrap_or(1.0);
+            let logical = size.to_logical::<f64>(scale);
+            let result = update_settings_in_memory(&settings_state, |settings| {
+                settings.overlay.window.width = logical.width.round() as u32;
+                settings.overlay.window.height = logical.height.round() as u32;
+            });
+            match result {
+                Ok(_) => request_debounced_save(&app, &save_trigger),
+                Err(error) => emit_command_error(&app, error),
             }
         }
         _ => {}
     });
+}
+
+/// Writes settings to disk only after the window has been quiet for
+/// `WINDOW_SAVE_DEBOUNCE`, so dragging never causes per-pixel file writes and
+/// never holds the settings lock during IO.
+fn spawn_debounced_settings_saver(
+    app: AppHandle,
+    settings_state: Arc<Mutex<AppSettings>>,
+) -> mpsc::Sender<()> {
+    let (sender, receiver) = mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        while receiver.recv().is_ok() {
+            while receiver.recv_timeout(WINDOW_SAVE_DEBOUNCE).is_ok() {}
+
+            let snapshot = match settings_state.lock() {
+                Ok(settings) => settings.clone(),
+                Err(_) => {
+                    emit_command_error(&app, "Settings lock is poisoned.".to_string());
+                    continue;
+                }
+            };
+            if let Err(error) = settings::save(&app, &snapshot) {
+                emit_command_error(&app, error);
+            }
+        }
+    });
+    sender
+}
+
+fn request_debounced_save(app: &AppHandle, save_trigger: &mpsc::Sender<()>) {
+    if save_trigger.send(()).is_err() {
+        emit_command_error(app, "Settings saver is no longer running.".to_string());
+    }
+}
+
+/// Rejects stored positions that no longer land on any connected monitor, so
+/// the overlay cannot restore off-screen after a display change.
+fn stored_position_is_visible(window: &WebviewWindow, x: i32, y: i32) -> bool {
+    let Ok(monitors) = window.available_monitors() else {
+        return true;
+    };
+    if monitors.is_empty() {
+        return true;
+    }
+
+    // Probe a point inside the toolbar area so at least the drag handle is
+    // reachable when the position is accepted.
+    let probe_x = x + 60;
+    let probe_y = y + 20;
+    monitors.iter().any(|monitor| {
+        let position = monitor.position();
+        let size = monitor.size();
+        probe_x >= position.x
+            && probe_x < position.x + size.width as i32
+            && probe_y >= position.y
+            && probe_y < position.y + size.height as i32
+    })
 }
 
 fn main_window(app: &AppHandle) -> Result<WebviewWindow, String> {

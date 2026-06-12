@@ -111,11 +111,11 @@ export function ControllerOverlay({
   }, [controller, loadedPreset]);
 
   if (error) {
-    return <div className="state-panel">Preset load failed: {error}</div>;
+    return <div className="state-panel">预设加载失败:{error}</div>;
   }
 
   if (!loadedPreset) {
-    return <div className="state-panel">Loading preset</div>;
+    return <div className="state-panel">正在加载预设</div>;
   }
 
   const aspect = loadedPreset.overlayWidth / loadedPreset.overlayHeight;

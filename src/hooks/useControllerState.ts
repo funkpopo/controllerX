@@ -54,10 +54,24 @@ export function useControllerState(): ControllerSnapshot {
   useEffect(() => {
     let disposed = false;
     let unlisten: (() => void) | undefined;
+    let frame: number | null = null;
+    let latest: ControllerSnapshot | null = null;
 
+    // Snapshots can arrive faster than the display refreshes; coalesce them to
+    // one React state update per animation frame.
     listen<ControllerSnapshot>("controller-state", (event) => {
-      if (!disposed) {
-        setState(event.payload);
+      if (disposed) {
+        return;
+      }
+
+      latest = event.payload;
+      if (frame === null) {
+        frame = window.requestAnimationFrame(() => {
+          frame = null;
+          if (!disposed && latest) {
+            setState(latest);
+          }
+        });
       }
     }).then((dispose) => {
       if (disposed) {
@@ -70,6 +84,9 @@ export function useControllerState(): ControllerSnapshot {
 
     return () => {
       disposed = true;
+      if (frame !== null) {
+        window.cancelAnimationFrame(frame);
+      }
       unlisten?.();
     };
   }, []);

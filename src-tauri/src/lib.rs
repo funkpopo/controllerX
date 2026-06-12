@@ -277,7 +277,16 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
                     .map(|_| ()),
                 );
             }
-            MENU_QUIT => app.exit(0),
+            MENU_QUIT => {
+                // Flush any window move/resize still waiting in the debounced
+                // saver before the process exits.
+                if let Ok(settings) = current_settings(&settings_state) {
+                    if let Err(error) = settings::save(app, &settings) {
+                        eprintln!("Failed to save settings on quit: {error}");
+                    }
+                }
+                app.exit(0)
+            }
             id => emit_command_error(app, format!("Unhandled tray menu event '{id}'.")),
         })
         .on_tray_icon_event(move |tray, event| {

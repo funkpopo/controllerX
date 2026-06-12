@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use gilrs::{Axis, Button, EventType, Gamepad, Gilrs};
+use gilrs::{Axis, Button, EventType, Gamepad, GamepadId, Gilrs};
 use serde::Serialize;
 use tauri::{AppHandle, Emitter};
 
@@ -15,7 +15,13 @@ use crate::settings::{AppSettings, InputSettings, SimulationScenario};
 use crate::xinput::{XInputPoller, XInputSnapshot};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(8);
+/// Polling cadence while nothing is connected; keeps idle CPU usage low and
+/// only delays first detection by at most this interval.
+const NO_DEVICE_POLL_INTERVAL: Duration = Duration::from_millis(120);
 const IDLE_SNAPSHOT_INTERVAL: Duration = Duration::from_millis(250);
+/// Snapshots are coalesced to at most ~60 per second; the poll loop still runs
+/// at full rate so no input edge is lost, only the IPC emission is throttled.
+const SNAPSHOT_EMIT_MIN_INTERVAL: Duration = Duration::from_millis(16);
 const INPUT_EVENT_EMIT_INTERVAL: Duration = Duration::from_millis(90);
 
 #[derive(Clone, Debug, Serialize)]
@@ -101,6 +107,9 @@ pub fn spawn_controller_poll(app: AppHandle, settings: Arc<Mutex<AppSettings>>) 
         let mut last_emit = Instant::now() - IDLE_SNAPSHOT_INTERVAL;
         let mut last_input_event_emit = Instant::now() - INPUT_EVENT_EMIT_INTERVAL;
         let mut last_simulated_connected: Option<bool> = None;
+        let mut last_active_gamepad: Option<GamepadId> = None;
+        let mut pending_emit = false;
+        let mut anything_connected = true;
         let mut xinput = XInputPoller::new();
         loop {
             let settings_snapshot = match settings.lock() {
@@ -117,6 +126,7 @@ pub fn spawn_controller_poll(app: AppHandle, settings: Arc<Mutex<AppSettings>>) 
             let mut changed = false;
             while let Some(event) = gilrs.next_event() {
                 changed = true;
+                last_active_gamepad = Some(event.id);
                 if matches!(event.event, EventType::Connected | EventType::Disconnected) {
                     emit_or_log(
                         &app,
@@ -154,7 +164,14 @@ pub fn spawn_controller_poll(app: AppHandle, settings: Arc<Mutex<AppSettings>>) 
                 }
             }
 
-            if changed || last_emit.elapsed() >= IDLE_SNAPSHOT_INTERVAL {
+            // Simulation animates continuously, so it always has fresh data.
+            if changed || settings_snapshot.simulation.enabled {
+                pending_emit = true;
+            }
+
+            if (pending_emit && last_emit.elapsed() >= SNAPSHOT_EMIT_MIN_INTERVAL)
+                || last_emit.elapsed() >= IDLE_SNAPSHOT_INTERVAL
+            {
                 let elapsed_ms = started_at.elapsed().as_millis();
                 let snapshot = if settings_snapshot.simulation.enabled {
                     let snapshot = build_simulated_snapshot(&settings_snapshot, elapsed_ms);
@@ -181,14 +198,23 @@ pub fn spawn_controller_poll(app: AppHandle, settings: Arc<Mutex<AppSettings>>) 
                         &gilrs,
                         &settings_snapshot,
                         xinput_poll.as_ref().and_then(|poll| poll.active.as_ref()),
+                        last_active_gamepad,
                         elapsed_ms,
                     )
                 };
+                anything_connected = snapshot.connected;
                 emit_or_log(&app, "controller-state", snapshot);
                 last_emit = Instant::now();
+                pending_emit = false;
             }
 
-            thread::sleep(POLL_INTERVAL);
+            let sleep_interval =
+                if anything_connected || pending_emit || settings_snapshot.simulation.enabled {
+                    POLL_INTERVAL
+                } else {
+                    NO_DEVICE_POLL_INTERVAL
+                };
+            thread::sleep(sleep_interval);
         }
     });
 }
@@ -197,9 +223,16 @@ fn build_hardware_snapshot(
     gilrs: &Gilrs,
     settings: &AppSettings,
     xinput: Option<&XInputSnapshot>,
+    preferred_gamepad: Option<GamepadId>,
     updated_at_ms: u128,
 ) -> ControllerSnapshot {
-    let active = gilrs.gamepads().find(|(_, gamepad)| gamepad.is_connected());
+    // Prefer the most recently active gamepad so that with several connected
+    // controllers the overlay follows the one actually being used, matching
+    // the XInput poller's behavior.
+    let active = preferred_gamepad
+        .map(|id| (id, gilrs.gamepad(id)))
+        .filter(|(_, gamepad)| gamepad.is_connected())
+        .or_else(|| gilrs.gamepads().find(|(_, gamepad)| gamepad.is_connected()));
 
     if let Some((id, gamepad)) = active {
         let identity = device_identity(id, &gamepad);
