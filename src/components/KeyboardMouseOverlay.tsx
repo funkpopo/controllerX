@@ -3,8 +3,6 @@ import {
   KEYBOARD_ROWS,
   MOUSE_BUTTONS,
   isKeyboardKeyActive,
-  movementMagnitude,
-  otherPressedKeyLabels,
   wheelMagnitude,
   type KeyboardKey
 } from "../data/keyboardMouse";
@@ -23,16 +21,7 @@ export function KeyboardMouseOverlay({
     () => new Set(keyboardMouse.pressedKeys),
     [keyboardMouse.pressedKeys]
   );
-  const extraKeys = useMemo(
-    () => otherPressedKeyLabels(keyboardMouse.pressedKeys),
-    [keyboardMouse.pressedKeys]
-  );
-  const movementActive = movementMagnitude(keyboardMouse.movement) > 0;
   const wheelActive = wheelMagnitude(keyboardMouse.movement) > 0;
-  const motionStyle = {
-    "--motion-x": `${clamp(keyboardMouse.movement.x, -32, 32)}px`,
-    "--motion-y": `${clamp(keyboardMouse.movement.y, -22, 22)}px`
-  } as CSSProperties;
   const wheelStyle = {
     "--wheel-x": `${clamp(keyboardMouse.movement.wheelX / 12, -18, 18)}px`,
     "--wheel-y": `${clamp(-keyboardMouse.movement.wheelY / 12, -18, 18)}px`
@@ -52,13 +41,6 @@ export function KeyboardMouseOverlay({
             ))}
           </div>
         ))}
-        {extraKeys.length > 0 ? (
-          <div className="keyboard-extra-row" aria-label="其他按键">
-            {extraKeys.map((label) => (
-              <span key={label}>{label}</span>
-            ))}
-          </div>
-        ) : null}
       </div>
 
       <div className="mouse-panel" aria-label="鼠标输入">
@@ -99,13 +81,6 @@ export function KeyboardMouseOverlay({
                 keyboardMouse.mouseButtons.x2 ? "active" : ""
               }`}
             />
-            {movementActive ? (
-              <i
-                key={`motion-${keyboardMouse.updatedAtMs}-${keyboardMouse.movement.x}-${keyboardMouse.movement.y}`}
-                className="mouse-motion-dot"
-                style={motionStyle}
-              />
-            ) : null}
           </div>
         </div>
         {!keyboardMouse.supported ? (
@@ -129,14 +104,20 @@ function KeyboardKeyCell({
     <span
       className={[
         "keyboard-key",
-        keyboardKey.width ? `keyboard-key-${keyboardKey.width}` : "",
         active ? "active" : ""
       ]
         .filter(Boolean)
         .join(" ")}
       data-active={active ? "true" : "false"}
+      style={{ width: `${keyboardKey.width}px` }}
     >
-      {keyboardKey.label}
+      {keyboardKey.topLabel ? (
+        <span className="keyboard-key-top">{keyboardKey.topLabel}</span>
+      ) : null}
+      <span className="keyboard-key-label">{keyboardKey.label}</span>
+      {keyboardKey.subLabel ? (
+        <span className="keyboard-key-sub">{keyboardKey.subLabel}</span>
+      ) : null}
     </span>
   );
 }

@@ -36,22 +36,21 @@ mod platform {
     use super::{emit_or_log, KeyboardMouseSnapshot, MouseButtons, MouseMovement};
     use std::collections::BTreeSet;
     use std::ptr::null_mut;
-    use std::sync::mpsc::{self, RecvTimeoutError};
+    use std::sync::mpsc;
     use std::sync::{Arc, Mutex, OnceLock};
     use std::thread;
-    use std::time::{Duration, Instant};
+    use std::time::Instant;
     use tauri::AppHandle;
     use windows_sys::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CallNextHookEx, GetMessageW, SetWindowsHookExW, UnhookWindowsHookEx, HC_ACTION, HHOOK,
         KBDLLHOOKSTRUCT, MSG, MSLLHOOKSTRUCT, WH_KEYBOARD_LL, WH_MOUSE_LL, WM_KEYDOWN, WM_KEYUP,
         WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN,
-        WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEMOVE, WM_MOUSEWHEEL, WM_RBUTTONDBLCLK,
-        WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_XBUTTONDBLCLK, WM_XBUTTONDOWN,
-        WM_XBUTTONUP, XBUTTON1, XBUTTON2,
+        WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEWHEEL, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN,
+        WM_RBUTTONUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_XBUTTONDBLCLK, WM_XBUTTONDOWN, WM_XBUTTONUP,
+        XBUTTON1, XBUTTON2,
     };
 
-    const SNAPSHOT_EMIT_MIN_INTERVAL: Duration = Duration::from_millis(16);
     const MAX_TRANSIENT_ACCUMULATION: i32 = 999;
 
     static HOOK_STATE: OnceLock<Arc<Mutex<HookSharedState>>> = OnceLock::new();
@@ -59,7 +58,6 @@ mod platform {
     #[derive(Clone, Copy, Debug, PartialEq, Eq)]
     enum InputSignal {
         Immediate,
-        Coalesced,
     }
 
     #[derive(Debug)]
@@ -74,8 +72,6 @@ mod platform {
         pressed_keys: BTreeSet<u32>,
         mouse_buttons: MouseButtons,
         movement: MouseMovement,
-        last_mouse_x: Option<i32>,
-        last_mouse_y: Option<i32>,
         updated_at_ms: u128,
     }
 
@@ -108,25 +104,8 @@ mod platform {
         shared: Arc<Mutex<HookSharedState>>,
         event_receiver: mpsc::Receiver<InputSignal>,
     ) {
-        let mut last_emit = Instant::now() - SNAPSHOT_EMIT_MIN_INTERVAL;
-
-        while let Ok(signal) = event_receiver.recv() {
-            if signal == InputSignal::Coalesced {
-                if let Some(remaining) = SNAPSHOT_EMIT_MIN_INTERVAL.checked_sub(last_emit.elapsed())
-                {
-                    match event_receiver.recv_timeout(remaining) {
-                        Ok(InputSignal::Immediate) => {}
-                        Ok(InputSignal::Coalesced) => {}
-                        Err(RecvTimeoutError::Timeout) => {}
-                        Err(RecvTimeoutError::Disconnected) => return,
-                    }
-                }
-
-                while matches!(event_receiver.try_recv(), Ok(InputSignal::Coalesced)) {}
-            }
-
+        while event_receiver.recv().is_ok() {
             emit_or_log(&app, "keyboard-mouse-state", take_snapshot(&shared));
-            last_emit = Instant::now();
         }
     }
 
@@ -209,7 +188,6 @@ mod platform {
         if code == HC_ACTION as i32 {
             let hook = unsafe { *(lparam as *const MSLLHOOKSTRUCT) };
             let signal = match wparam as u32 {
-                WM_MOUSEMOVE => record_mouse_move(hook.pt.x, hook.pt.y),
                 WM_LBUTTONDOWN | WM_LBUTTONDBLCLK => record_mouse_button(MouseButton::Left, true),
                 WM_LBUTTONUP => record_mouse_button(MouseButton::Left, false),
                 WM_RBUTTONDOWN | WM_RBUTTONDBLCLK => record_mouse_button(MouseButton::Right, true),
@@ -255,28 +233,6 @@ mod platform {
         } else {
             None
         }
-    }
-
-    fn record_mouse_move(x: i32, y: i32) -> Option<InputSignal> {
-        let mut shared = hook_state().lock().ok()?;
-        let previous = shared.input.last_mouse_x.zip(shared.input.last_mouse_y);
-        shared.input.last_mouse_x = Some(x);
-        shared.input.last_mouse_y = Some(y);
-
-        let Some((last_x, last_y)) = previous else {
-            return None;
-        };
-
-        let dx = x.saturating_sub(last_x);
-        let dy = y.saturating_sub(last_y);
-        if dx == 0 && dy == 0 {
-            return None;
-        }
-
-        shared.input.movement.x = clamp_transient(shared.input.movement.x.saturating_add(dx));
-        shared.input.movement.y = clamp_transient(shared.input.movement.y.saturating_add(dy));
-        shared.input.updated_at_ms = shared.started_at.elapsed().as_millis();
-        Some(InputSignal::Coalesced)
     }
 
     fn record_mouse_button(button: MouseButton, pressed: bool) -> Option<InputSignal> {

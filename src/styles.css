@@ -169,8 +169,8 @@ textarea {
 
 .preset-select {
   height: 30px;
-  width: 116px;
-  flex: 0 0 116px;
+  width: 142px;
+  flex: 0 0 142px;
   color: #eef7f8;
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.14);
@@ -729,53 +729,56 @@ textarea {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  gap: 10px;
-  max-width: calc(100% - 16px);
+  gap: 8px;
+  width: max-content;
   pointer-events: none;
-  filter: drop-shadow(0 16px 24px rgba(0, 0, 0, 0.34));
-  transform: translateX(-50%);
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.32));
+  transform: translateX(-50%) scale(0.76);
   transform-origin: bottom center;
   transition: opacity 120ms ease;
 }
 
 .keyboard-panel,
 .mouse-panel {
-  color: rgba(242, 249, 249, 0.9);
-  background: rgba(13, 17, 19, 0.66);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 8px;
-  backdrop-filter: blur(18px);
+  color: #050505;
+  background: #d8d8d8;
+  border: 1px solid #6d6d6d;
+  border-radius: 4px;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.65),
+    0 10px 18px rgba(0, 0, 0, 0.26);
 }
 
 .keyboard-panel {
   display: grid;
-  gap: 4px;
-  padding: 8px;
+  gap: 3px;
+  padding: 6px;
 }
 
 .keyboard-row {
   display: flex;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .keyboard-key,
-.keyboard-extra-row span,
 .mouse-buttons span {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: rgba(237, 248, 248, 0.82);
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  border-radius: 6px;
-  font-size: 10px;
+  position: relative;
+  color: #050505;
+  background: linear-gradient(#fbfbfb, #e7e7e7);
+  border: 1px solid #1f1f1f;
+  border-radius: 4px;
+  font-size: 12px;
   line-height: 1;
-  font-weight: 650;
+  font-weight: 500;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+  box-shadow:
+    inset 1px 1px 0 rgba(255, 255, 255, 0.94),
+    inset -2px -2px 0 rgba(0, 0, 0, 0.18);
   transition:
-    background 48ms linear,
+    background 48ms ease,
     border-color 48ms linear,
     color 48ms linear,
     transform 48ms linear,
@@ -783,57 +786,56 @@ textarea {
 }
 
 .keyboard-key {
-  width: 31px;
-  height: 27px;
-  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.28);
-}
-
-.keyboard-key-wide {
-  width: 50px;
-}
-
-.keyboard-key-space {
-  width: 112px;
+  height: 50px;
+  flex: 0 0 auto;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding: 5px 6px;
 }
 
 .keyboard-key.active,
-.keyboard-extra-row span,
 .mouse-buttons span.active,
 .mouse-main-button.active,
 .mouse-side.active,
 .mouse-wheel.active {
-  color: #061313;
-  background: rgba(125, 222, 223, 0.92);
-  border-color: rgba(125, 222, 223, 0.98);
+  color: #000;
+  background: linear-gradient(#cfcfcf, #b9b9b9);
+  border-color: #0f0f0f;
   box-shadow:
-    0 0 12px rgba(125, 222, 223, 0.42),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.24);
+    inset 2px 2px 0 rgba(0, 0, 0, 0.2),
+    inset -1px -1px 0 rgba(255, 255, 255, 0.55);
 }
 
 .keyboard-key.active {
   transform: translateY(1px);
 }
 
-.keyboard-extra-row {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 4px;
-  max-width: 286px;
-  padding-top: 3px;
+.keyboard-key-top {
+  position: absolute;
+  top: 5px;
+  left: 7px;
 }
 
-.keyboard-extra-row span {
-  min-width: 34px;
-  height: 22px;
-  padding: 0 6px;
+.keyboard-key-label {
+  position: absolute;
+  left: 7px;
+  bottom: 11px;
+}
+
+.keyboard-key-sub {
+  position: absolute;
+  left: 50%;
+  bottom: -2px;
+  font-size: 9px;
+  line-height: 1;
+  transform: translateX(-50%);
 }
 
 .mouse-panel {
-  width: 134px;
+  width: 126px;
   display: grid;
-  gap: 7px;
-  padding: 8px;
+  gap: 6px;
+  padding: 6px;
 }
 
 .mouse-buttons {
@@ -844,6 +846,10 @@ textarea {
 
 .mouse-buttons span {
   height: 22px;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .mouse-visual {
@@ -856,11 +862,10 @@ textarea {
   width: 62px;
   height: 94px;
   overflow: hidden;
-  background:
-    linear-gradient(rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02)),
-    rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(#f8f8f8, #d9d9d9);
+  border: 1px solid #1f1f1f;
   border-radius: 30px 30px 22px 22px;
+  box-shadow: inset -2px -2px 0 rgba(0, 0, 0, 0.16);
 }
 
 .mouse-main-button {
@@ -868,8 +873,8 @@ textarea {
   top: 0;
   width: 50%;
   height: 38px;
-  background: rgba(255, 255, 255, 0.08);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.34);
+  border-bottom: 1px solid #888;
   transition:
     background 48ms linear,
     box-shadow 48ms linear;
@@ -877,7 +882,7 @@ textarea {
 
 .mouse-left {
   left: 0;
-  border-right: 1px solid rgba(255, 255, 255, 0.12);
+  border-right: 1px solid #8a8a8a;
   border-radius: 30px 0 6px 0;
 }
 
@@ -894,8 +899,8 @@ textarea {
   z-index: 2;
   width: 9px;
   height: 20px;
-  background: rgba(237, 248, 248, 0.8);
-  border: 1px solid rgba(255, 255, 255, 0.34);
+  background: #f3f3f3;
+  border: 1px solid #555;
   border-radius: 8px;
   transform: translateX(-50%);
 }
@@ -909,8 +914,8 @@ textarea {
   left: 5px;
   width: 13px;
   height: 9px;
-  background: rgba(255, 255, 255, 0.12);
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: #f3f3f3;
+  border: 1px solid #555;
   border-radius: 6px;
   transition:
     background 48ms linear,
@@ -925,37 +930,13 @@ textarea {
   top: 60px;
 }
 
-.mouse-motion-dot {
-  position: absolute;
-  left: calc(50% - 5px);
-  top: 56px;
-  width: 10px;
-  height: 10px;
-  background: rgba(242, 188, 105, 0.95);
-  border-radius: 50%;
-  box-shadow: 0 0 16px rgba(242, 188, 105, 0.74);
-  animation: motion-pulse 180ms ease-out both;
-}
-
 .keyboard-mouse-warning {
   min-width: 0;
   overflow-wrap: anywhere;
-  color: #ffe2b7;
+  color: #2f2f2f;
   font-size: 10px;
   line-height: 1.25;
   text-align: center;
-}
-
-@keyframes motion-pulse {
-  from {
-    opacity: 1;
-    transform: translate(0, 0) scale(1);
-  }
-
-  to {
-    opacity: 0;
-    transform: translate(var(--motion-x), var(--motion-y)) scale(1.45);
-  }
 }
 
 @keyframes wheel-pulse {
@@ -1449,8 +1430,8 @@ textarea {
   }
 
   .preset-select {
-    width: 94px;
-    flex-basis: 94px;
+    width: 118px;
+    flex-basis: 118px;
   }
 
   .debug-panel {
@@ -1467,7 +1448,7 @@ textarea {
 
   .keyboard-mouse-overlay {
     bottom: 6px;
-    transform: translateX(-50%) scale(0.86);
+    transform: translateX(-50%) scale(0.54);
   }
 
   .debug-grid {
@@ -1511,8 +1492,8 @@ textarea {
   }
 
   .preset-select {
-    width: 80px;
-    flex-basis: 80px;
+    width: 106px;
+    flex-basis: 106px;
     font-size: 11px;
   }
 
@@ -1522,7 +1503,7 @@ textarea {
   }
 
   .keyboard-mouse-overlay {
-    transform: translateX(-50%) scale(0.74);
+    transform: translateX(-50%) scale(0.42);
   }
 
   .adjust-field-label {

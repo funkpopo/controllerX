@@ -10,7 +10,7 @@ controllerX shows floating input overlays on your desktop and updates them as yo
 
 - Transparent, always-on-top overlay window.
 - Supports Xbox 360, Xbox One, Xbox Series, DualShock 3, DualShock 4, DualSense, and common XInput-compatible controllers.
-- Shows a keyboard/mouse overlay with common game keys, extra pressed-key labels, mouse buttons, wheel pulses, and movement pulses.
+- Shows a keyboard/mouse overlay with a fixed 64-key compact layout, mouse buttons, and wheel pulses.
 - Tray menu for show/hide, click-through mode, lock position, quick sizes, and quit.
 - Saves your overlay settings, including opacity, scale, position, deadzone, sensitivity, and axis inversion.
 - Keeps controller and keyboard/mouse input updating on Windows even when the overlay is click-through or not focused.

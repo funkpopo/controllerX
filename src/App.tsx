@@ -3,8 +3,6 @@ import { listen } from "@tauri-apps/api/event";
 import {
   Bug,
   EyeOff,
-  Gamepad2,
-  Keyboard,
   ListChecks,
   Lock,
   MousePointer2,
@@ -36,6 +34,7 @@ type OverlaySizeName = "compact" | "standard" | "large";
 
 const ERROR_TOAST_AUTO_DISMISS_MS = 6000;
 const POINTER_ACTIVITY_THROTTLE_MS = 400;
+const KEYBOARD_MOUSE_PRESET_VALUE = "__keyboard_mouse";
 
 function App() {
   const controller = useControllerState();
@@ -218,7 +217,8 @@ function ReadyApp({
   const showControls = !settings.overlay.clickThrough && !settings.overlay.obsMode;
   const showOverlayMessages = !settings.overlay.obsMode;
   const showControllerOverlay = settings.overlay.showController;
-  const showKeyboardMouseOverlay = settings.overlay.showKeyboardMouse;
+  const showKeyboardMouseOverlay =
+    settings.overlay.showKeyboardMouse && !settings.overlay.showController;
 
   // Stable handlers so the memoized Toolbar does not re-render on every
   // controller snapshot; they only change when the settings they read change.
@@ -423,21 +423,22 @@ const Toolbar = memo(function Toolbar({
 
       <select
         className="preset-select"
-        value={settings.overlay.selectedPresetId ?? ""}
+        value={deviceSelectValue(settings)}
         onChange={(event) =>
           void onUpdate((next) => {
-            next.overlay.selectedPresetId = event.target.value || null;
+            applyDeviceSelection(next, event.target.value);
             return next;
           })
         }
-        title="视觉预设"
+        title="显示设备"
       >
-        <option value="">自动匹配</option>
+        <option value="">自动匹配手柄</option>
         {OVERLAY_PRESETS.map((overlayPreset) => (
           <option key={overlayPreset.id} value={overlayPreset.id}>
             {overlayPreset.label}
           </option>
         ))}
+        <option value={KEYBOARD_MOUSE_PRESET_VALUE}>键盘鼠标 64 键</option>
       </select>
 
       <SettingsPopover
@@ -448,33 +449,6 @@ const Toolbar = memo(function Toolbar({
         onUpdate={onUpdate}
         onSetSize={onSetSize}
       />
-
-      <button
-        className={`icon-button ${settings.overlay.showController ? "active" : ""}`}
-        aria-label="显示手柄层"
-        title="显示手柄层"
-        onClick={() =>
-          void onUpdate((next) => {
-            next.overlay.showController = !next.overlay.showController;
-            return next;
-          })
-        }
-      >
-        <Gamepad2 size={16} />
-      </button>
-      <button
-        className={`icon-button ${settings.overlay.showKeyboardMouse ? "active" : ""}`}
-        aria-label="显示键鼠层"
-        title="显示键鼠层"
-        onClick={() =>
-          void onUpdate((next) => {
-            next.overlay.showKeyboardMouse = !next.overlay.showKeyboardMouse;
-            return next;
-          })
-        }
-      >
-        <Keyboard size={16} />
-      </button>
 
       <button
         className={`icon-button ${settings.overlay.clickThrough ? "active" : ""}`}
@@ -547,6 +521,27 @@ function statusText(controller: ControllerSnapshot) {
 
 function formatError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
+}
+
+function deviceSelectValue(settings: AppSettings) {
+  if (settings.overlay.showKeyboardMouse && !settings.overlay.showController) {
+    return KEYBOARD_MOUSE_PRESET_VALUE;
+  }
+
+  return settings.overlay.selectedPresetId ?? "";
+}
+
+function applyDeviceSelection(settings: AppSettings, value: string) {
+  if (value === KEYBOARD_MOUSE_PRESET_VALUE) {
+    settings.overlay.selectedPresetId = null;
+    settings.overlay.showController = false;
+    settings.overlay.showKeyboardMouse = true;
+    return;
+  }
+
+  settings.overlay.selectedPresetId = value || null;
+  settings.overlay.showController = true;
+  settings.overlay.showKeyboardMouse = false;
 }
 
 function isInteractiveToolbarTarget(target: EventTarget | null) {
