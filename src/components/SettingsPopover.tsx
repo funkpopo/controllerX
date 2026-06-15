@@ -114,6 +114,32 @@ export function SettingsPopover({
           />
 
           <section className="adjust-section">
+            <h3>叠加内容</h3>
+            <div className="adjust-check-row">
+              <CheckField
+                label="显示手柄层"
+                checked={settings.overlay.showController}
+                onChange={(checked) =>
+                  onUpdate((next) => {
+                    next.overlay.showController = checked;
+                    return next;
+                  })
+                }
+              />
+              <CheckField
+                label="显示键鼠层"
+                checked={settings.overlay.showKeyboardMouse}
+                onChange={(checked) =>
+                  onUpdate((next) => {
+                    next.overlay.showKeyboardMouse = checked;
+                    return next;
+                  })
+                }
+              />
+            </div>
+          </section>
+
+          <section className="adjust-section">
             <h3>窗口尺寸</h3>
             <div className="adjust-size-buttons">
               {SIZE_OPTIONS.map((option) => (

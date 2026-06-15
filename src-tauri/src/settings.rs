@@ -20,6 +20,10 @@ pub struct AppSettings {
 pub struct OverlaySettings {
     pub selected_preset_id: Option<String>,
     pub opacity: f32,
+    #[serde(default = "default_true")]
+    pub show_controller: bool,
+    #[serde(default = "default_true")]
+    pub show_keyboard_mouse: bool,
     pub click_through: bool,
     pub lock_position: bool,
     pub hide_toolbar_when_idle: bool,
@@ -75,6 +79,8 @@ impl Default for AppSettings {
             overlay: OverlaySettings {
                 selected_preset_id: None,
                 opacity: 0.92,
+                show_controller: true,
+                show_keyboard_mouse: true,
                 click_through: false,
                 lock_position: false,
                 hide_toolbar_when_idle: false,
@@ -157,6 +163,10 @@ pub fn sanitize(settings: &mut AppSettings) {
     settings.input.trigger_deadzone = settings.input.trigger_deadzone.clamp(0.0, 0.4);
     settings.input.stick_sensitivity = settings.input.stick_sensitivity.clamp(0.25, 2.5);
     settings.input.trigger_sensitivity = settings.input.trigger_sensitivity.clamp(0.25, 2.5);
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[cfg(test)]

@@ -143,6 +143,8 @@ export type WindowSettings = {
 export type OverlaySettings = {
   selectedPresetId: string | null;
   opacity: number;
+  showController: boolean;
+  showKeyboardMouse: boolean;
   clickThrough: boolean;
   lockPosition: boolean;
   hideToolbarWhenIdle: boolean;
@@ -181,4 +183,28 @@ export type ControllerDeviceEvent = {
   id: number;
   message: string;
   receivedAtMs: number;
+};
+
+export type MouseButtons = {
+  left: boolean;
+  right: boolean;
+  middle: boolean;
+  x1: boolean;
+  x2: boolean;
+};
+
+export type MouseMovement = {
+  x: number;
+  y: number;
+  wheelX: number;
+  wheelY: number;
+};
+
+export type KeyboardMouseSnapshot = {
+  supported: boolean;
+  error: string | null;
+  pressedKeys: number[];
+  mouseButtons: MouseButtons;
+  movement: MouseMovement;
+  updatedAtMs: number;
 };

@@ -3,6 +3,8 @@ import { listen } from "@tauri-apps/api/event";
 import {
   Bug,
   EyeOff,
+  Gamepad2,
+  Keyboard,
   ListChecks,
   Lock,
   MousePointer2,
@@ -16,14 +18,17 @@ import { DebugPanel } from "./components/DebugPanel";
 import { HardwareVerificationPanel } from "./components/HardwareVerificationPanel";
 import { SettingsPopover } from "./components/SettingsPopover";
 import { StatePanel } from "./components/StatePanel";
+import { KeyboardMouseOverlay } from "./components/KeyboardMouseOverlay";
 import { OVERLAY_PRESETS, selectPreset } from "./data/presets";
 import { useAppSettings } from "./hooks/useAppSettings";
 import { useControllerEvents } from "./hooks/useControllerEvents";
 import { useControllerState } from "./hooks/useControllerState";
+import { useKeyboardMouseState } from "./hooks/useKeyboardMouseState";
 import type {
   AppSettings,
   ControllerDeviceEvent,
   ControllerSnapshot,
+  KeyboardMouseSnapshot,
   ProfileInfo
 } from "./types/controller";
 
@@ -34,6 +39,7 @@ const POINTER_ACTIVITY_THROTTLE_MS = 400;
 
 function App() {
   const controller = useControllerState();
+  const keyboardMouse = useKeyboardMouseState();
   const deviceEvents = useControllerEvents();
   const settingsApi = useAppSettings();
 
@@ -61,6 +67,7 @@ function App() {
   return (
     <ReadyApp
       controller={controller}
+      keyboardMouse={keyboardMouse}
       deviceEvents={deviceEvents}
       settings={settings}
       profiles={profiles}
@@ -74,6 +81,7 @@ function App() {
 
 function ReadyApp({
   controller,
+  keyboardMouse,
   deviceEvents,
   settings,
   profiles,
@@ -83,6 +91,7 @@ function ReadyApp({
   setOverlaySize
 }: {
   controller: ControllerSnapshot;
+  keyboardMouse: KeyboardMouseSnapshot;
   deviceEvents: ControllerDeviceEvent[];
   settings: AppSettings;
   profiles: ProfileInfo[];
@@ -152,14 +161,20 @@ function ReadyApp({
         if (!disposed) {
           setCommandError(event.payload);
         }
+      }),
+      listen<string>("keyboard-mouse-error", (event) => {
+        if (!disposed) {
+          setCommandError(event.payload);
+        }
       })
     ]);
 
     return () => {
       disposed = true;
-      void listeners.then(([unlistenApp, unlistenController]) => {
+      void listeners.then(([unlistenApp, unlistenController, unlistenKeyboardMouse]) => {
         unlistenApp();
         unlistenController();
+        unlistenKeyboardMouse();
       });
     };
   }, []);
@@ -202,6 +217,8 @@ function ReadyApp({
 
   const showControls = !settings.overlay.clickThrough && !settings.overlay.obsMode;
   const showOverlayMessages = !settings.overlay.obsMode;
+  const showControllerOverlay = settings.overlay.showController;
+  const showKeyboardMouseOverlay = settings.overlay.showKeyboardMouse;
 
   // Stable handlers so the memoized Toolbar does not re-render on every
   // controller snapshot; they only change when the settings they read change.
@@ -278,9 +295,11 @@ function ReadyApp({
 
       <section className="overlay-workspace">
         {preset.error && showOverlayMessages ? (
-          <StatePanel controller={controller} message={`预设不可用:${preset.error}`} />
+          showControllerOverlay ? (
+            <StatePanel controller={controller} message={`预设不可用:${preset.error}`} />
+          ) : null
         ) : null}
-        {preset.value ? (
+        {preset.value && showControllerOverlay ? (
           <ControllerOverlay
             controller={controller}
             preset={preset.value}
@@ -288,11 +307,25 @@ function ReadyApp({
             debugVisible={debugVisible}
           />
         ) : null}
-        {!preset.error && !preset.value && showOverlayMessages ? (
+        {showKeyboardMouseOverlay ? (
+          <KeyboardMouseOverlay
+            keyboardMouse={keyboardMouse}
+            opacity={settings.overlay.opacity}
+          />
+        ) : null}
+        {!preset.error &&
+        !preset.value &&
+        showOverlayMessages &&
+        showControllerOverlay &&
+        !showKeyboardMouseOverlay ? (
           <StatePanel controller={controller} />
         ) : null}
         {debugVisible && showControls ? (
-          <DebugPanel controller={controller} deviceEvents={deviceEvents} />
+          <DebugPanel
+            controller={controller}
+            keyboardMouse={keyboardMouse}
+            deviceEvents={deviceEvents}
+          />
         ) : null}
         {showControls ? (
           <HardwareVerificationPanel
@@ -415,6 +448,33 @@ const Toolbar = memo(function Toolbar({
         onUpdate={onUpdate}
         onSetSize={onSetSize}
       />
+
+      <button
+        className={`icon-button ${settings.overlay.showController ? "active" : ""}`}
+        aria-label="显示手柄层"
+        title="显示手柄层"
+        onClick={() =>
+          void onUpdate((next) => {
+            next.overlay.showController = !next.overlay.showController;
+            return next;
+          })
+        }
+      >
+        <Gamepad2 size={16} />
+      </button>
+      <button
+        className={`icon-button ${settings.overlay.showKeyboardMouse ? "active" : ""}`}
+        aria-label="显示键鼠层"
+        title="显示键鼠层"
+        onClick={() =>
+          void onUpdate((next) => {
+            next.overlay.showKeyboardMouse = !next.overlay.showKeyboardMouse;
+            return next;
+          })
+        }
+      >
+        <Keyboard size={16} />
+      </button>
 
       <button
         className={`icon-button ${settings.overlay.clickThrough ? "active" : ""}`}

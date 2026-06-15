@@ -1,18 +1,19 @@
 # controllerX
 
-Transparent desktop controller overlay for Xbox and PlayStation gamepads.
+Transparent desktop input overlay for Xbox and PlayStation gamepads, keyboards, and mice.
 
 [中文说明](README_zh.md)
 
-controllerX shows a floating gamepad on your desktop and updates it as you press buttons, move sticks, or pull triggers. It is useful for gameplay recording, streaming, testing controller input, and checking whether a controller is being detected correctly.
+controllerX shows floating input overlays on your desktop and updates them as you press controller buttons, move sticks, type on the keyboard, or use the mouse. It is useful for gameplay recording, streaming, testing input devices, and checking whether a controller is being detected correctly.
 
 ## Features
 
 - Transparent, always-on-top overlay window.
 - Supports Xbox 360, Xbox One, Xbox Series, DualShock 3, DualShock 4, DualSense, and common XInput-compatible controllers.
+- Shows a keyboard/mouse overlay with common game keys, extra pressed-key labels, mouse buttons, wheel pulses, and movement pulses.
 - Tray menu for show/hide, click-through mode, lock position, quick sizes, and quit.
 - Saves your overlay settings, including opacity, scale, position, deadzone, sensitivity, and axis inversion.
-- Keeps updating on Windows even when the overlay is click-through or not focused.
+- Keeps controller and keyboard/mouse input updating on Windows even when the overlay is click-through or not focused.
 - Shows a clear message when a controller or visual preset is not supported.
 - Includes simulation, debug, and hardware verification tools for development and testing.
 

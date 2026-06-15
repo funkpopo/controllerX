@@ -1,11 +1,23 @@
-import type { ControllerDeviceEvent, ControllerSnapshot } from "../types/controller";
+import { keyLabel } from "../data/keyboardMouse";
+import type {
+  ControllerDeviceEvent,
+  ControllerSnapshot,
+  KeyboardMouseSnapshot
+} from "../types/controller";
 
 type DebugPanelProps = {
   controller: ControllerSnapshot;
+  keyboardMouse: KeyboardMouseSnapshot;
   deviceEvents: ControllerDeviceEvent[];
 };
 
-export function DebugPanel({ controller, deviceEvents }: DebugPanelProps) {
+export function DebugPanel({
+  controller,
+  keyboardMouse,
+  deviceEvents
+}: DebugPanelProps) {
+  const pressedKeyLabels = keyboardMouse.pressedKeys.map(keyLabel);
+
   return (
     <aside className="debug-panel">
       <div className="debug-header">
@@ -53,6 +65,32 @@ export function DebugPanel({ controller, deviceEvents }: DebugPanelProps) {
           dy: controller.axes.dpadY
         }}
       />
+      <ValueGrid
+        title="键鼠"
+        values={{
+          ml: keyboardMouse.mouseButtons.left ? 1 : 0,
+          mr: keyboardMouse.mouseButtons.right ? 1 : 0,
+          mm: keyboardMouse.mouseButtons.middle ? 1 : 0,
+          x1: keyboardMouse.mouseButtons.x1 ? 1 : 0,
+          x2: keyboardMouse.mouseButtons.x2 ? 1 : 0,
+          dx: keyboardMouse.movement.x,
+          dy: keyboardMouse.movement.y,
+          wx: keyboardMouse.movement.wheelX,
+          wy: keyboardMouse.movement.wheelY
+        }}
+      />
+      <section className="debug-section">
+        <h2>键盘</h2>
+        <div className="debug-events">
+          <p>
+            {keyboardMouse.supported
+              ? pressedKeyLabels.length > 0
+                ? pressedKeyLabels.join(", ")
+                : "无按键"
+              : keyboardMouse.error ?? "键鼠采集不可用"}
+          </p>
+        </div>
+      </section>
       {controller.device ? (
         <div className="debug-device">
           <span>VID {formatHex(controller.device.vendorId)}</span>

@@ -1,4 +1,5 @@
 mod controller;
+mod keyboard_mouse;
 mod platform_identity;
 mod profiles;
 mod settings;
@@ -51,6 +52,7 @@ pub fn run() {
                 .map_err(|error| tauri::Error::Anyhow(anyhow::anyhow!(error)))?;
             create_tray(app.handle(), settings_state.clone())?;
             controller::spawn_controller_poll(app.handle().clone(), settings_state);
+            keyboard_mouse::spawn_keyboard_mouse_poll(app.handle().clone());
             Ok(())
         })
         .run(tauri::generate_context!())
@@ -171,7 +173,7 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
     let obs_mode = CheckMenuItem::with_id(
         app,
         MENU_OBS_MODE,
-        "OBS 模式（仅显示手柄）",
+        "OBS 模式（仅显示输入）",
         true,
         initial_settings.overlay.obs_mode,
         None::<&str>,

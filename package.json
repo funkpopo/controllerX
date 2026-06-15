@@ -1,7 +1,7 @@
 {
   "name": "controllerx",
   "version": "0.1.0",
-  "description": "Transparent desktop controller overlay for Xbox and PlayStation gamepads.",
+  "description": "Transparent desktop input overlay for controllers, keyboards, and mice.",
   "type": "module",
   "scripts": {
     "dev": "vite --host 127.0.0.1",
