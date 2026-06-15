@@ -1,7 +1,6 @@
 import { useMemo, type CSSProperties } from "react";
 import {
   KEYBOARD_ROWS,
-  MOUSE_BUTTONS,
   isKeyboardKeyActive,
   wheelMagnitude,
   type KeyboardKey
@@ -44,16 +43,6 @@ export function KeyboardMouseOverlay({
       </div>
 
       <div className="mouse-panel" aria-label="鼠标输入">
-        <div className="mouse-buttons">
-          {MOUSE_BUTTONS.map((button) => (
-            <span
-              key={button.id}
-              className={keyboardMouse.mouseButtons[button.id] ? "active" : ""}
-            >
-              {button.label}
-            </span>
-          ))}
-        </div>
         <div className="mouse-visual">
           <div className="mouse-shell">
             <span

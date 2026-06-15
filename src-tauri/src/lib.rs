@@ -37,6 +37,7 @@ pub fn run() {
             set_lock_position,
             set_obs_mode,
             set_overlay_size,
+            set_display_device_window_size,
             save_hardware_verification_report
         ])
         .setup(|app| {
@@ -130,6 +131,23 @@ fn set_overlay_size(
     };
 
     window_control::set_named_size(&app, &settings, size)
+}
+
+#[tauri::command]
+fn set_display_device_window_size(
+    app: tauri::AppHandle,
+    settings: State<'_, SettingsState>,
+    display_device: &str,
+) -> Result<AppSettings, String> {
+    let size = match display_device {
+        "controller" => window_control::DisplayDeviceWindowSize::Controller,
+        "keyboardMouse" | "keyboard_mouse" => {
+            window_control::DisplayDeviceWindowSize::KeyboardMouse
+        }
+        _ => return Err(format!("Unsupported display device '{display_device}'.")),
+    };
+
+    window_control::set_display_device_window_size(&app, &settings, size)
 }
 
 #[tauri::command]

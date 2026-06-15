@@ -1,4 +1,4 @@
-import type { KeyboardMouseSnapshot, MouseMovement } from "../types/controller";
+import type { MouseMovement } from "../types/controller";
 
 export type KeyboardKey = {
   id: string;
@@ -7,13 +7,6 @@ export type KeyboardKey = {
   width: number;
   topLabel?: string;
   subLabel?: string;
-};
-
-export type MouseButtonId = keyof KeyboardMouseSnapshot["mouseButtons"];
-
-export type MouseButtonDefinition = {
-  id: MouseButtonId;
-  label: string;
 };
 
 export const VK = {
@@ -166,14 +159,6 @@ export const KEYBOARD_ROWS: KeyboardKey[][] = [
     key("down", "↓", VK.down),
     key("right", "→", VK.right)
   ]
-];
-
-export const MOUSE_BUTTONS: MouseButtonDefinition[] = [
-  { id: "left", label: "L" },
-  { id: "middle", label: "M" },
-  { id: "right", label: "R" },
-  { id: "x1", label: "X1" },
-  { id: "x2", label: "X2" }
 ];
 
 const KNOWN_LAYOUT_CODES = new Set(

@@ -2,8 +2,8 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::time::Duration;
 
 use tauri::{
-    AppHandle, Emitter, LogicalSize, Manager, PhysicalPosition, Position, Size, WebviewWindow,
-    WindowEvent,
+    AppHandle, Emitter, LogicalSize, Manager, Monitor, PhysicalPosition, PhysicalSize, Position,
+    Size, WebviewWindow, WindowEvent,
 };
 
 use crate::settings::{self, AppSettings};
@@ -12,6 +12,11 @@ pub const MAIN_WINDOW: &str = "main";
 
 /// How long the window must stay still before move/resize changes hit the disk.
 const WINDOW_SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
+const SCREEN_EDGE_MARGIN: i32 = 8;
+const MIN_WINDOW_WIDTH: u32 = 420;
+const MIN_WINDOW_HEIGHT: u32 = 260;
+const CONTROLLER_WINDOW_SIZE: (u32, u32) = (720, 438);
+const KEYBOARD_MOUSE_WINDOW_SIZE: (u32, u32) = (720, 320);
 
 #[derive(Clone, Copy, Debug)]
 pub enum OverlayWindowSize {
@@ -26,6 +31,21 @@ impl OverlayWindowSize {
             OverlayWindowSize::Compact => (520, 320),
             OverlayWindowSize::Standard => (720, 438),
             OverlayWindowSize::Large => (980, 596),
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug)]
+pub enum DisplayDeviceWindowSize {
+    Controller,
+    KeyboardMouse,
+}
+
+impl DisplayDeviceWindowSize {
+    fn dimensions(self) -> (u32, u32) {
+        match self {
+            DisplayDeviceWindowSize::Controller => CONTROLLER_WINDOW_SIZE,
+            DisplayDeviceWindowSize::KeyboardMouse => KEYBOARD_MOUSE_WINDOW_SIZE,
         }
     }
 }
@@ -64,12 +84,12 @@ pub fn configure_main_window(
         }
     }
 
-    window
-        .set_size(Size::Logical(LogicalSize::new(
-            settings.overlay.window.width as f64,
-            settings.overlay.window.height as f64,
-        )))
-        .map_err(|error| format!("Failed to restore window size: {error}"))?;
+    apply_window_size_and_keep_visible(
+        &window,
+        settings.overlay.window.width,
+        settings.overlay.window.height,
+    )
+    .map_err(|error| format!("Failed to restore window size: {error}"))?;
 
     window
         .show()
@@ -158,13 +178,38 @@ pub fn set_named_size(
 ) -> Result<AppSettings, String> {
     let window = main_window(app)?;
     let (width, height) = size.dimensions();
-    window
-        .set_size(Size::Logical(LogicalSize::new(width as f64, height as f64)))
-        .map_err(|error| format!("Failed to set window size: {error}"))?;
+    let applied = apply_window_size_and_keep_visible(&window, width, height)?;
 
     let updated = update_settings(app, settings_state, |settings| {
-        settings.overlay.window.width = width;
-        settings.overlay.window.height = height;
+        settings.overlay.window.width = applied.logical_width;
+        settings.overlay.window.height = applied.logical_height;
+        if let Some(position) = applied.position {
+            settings.overlay.window.x = Some(position.x);
+            settings.overlay.window.y = Some(position.y);
+        }
+    })?;
+
+    emit_settings_updated(app, &updated);
+
+    Ok(updated)
+}
+
+pub fn set_display_device_window_size(
+    app: &AppHandle,
+    settings_state: &Arc<Mutex<AppSettings>>,
+    size: DisplayDeviceWindowSize,
+) -> Result<AppSettings, String> {
+    let window = main_window(app)?;
+    let (width, height) = size.dimensions();
+    let applied = apply_window_size_and_keep_visible(&window, width, height)?;
+
+    let updated = update_settings(app, settings_state, |settings| {
+        settings.overlay.window.width = applied.logical_width;
+        settings.overlay.window.height = applied.logical_height;
+        if let Some(position) = applied.position {
+            settings.overlay.window.x = Some(position.x);
+            settings.overlay.window.y = Some(position.y);
+        }
     })?;
 
     emit_settings_updated(app, &updated);
@@ -203,12 +248,18 @@ pub fn replace_settings(
 
     let window = main_window(app)?;
     apply_window_interaction_state(&window, &next_settings)?;
-    window
-        .set_size(Size::Logical(LogicalSize::new(
-            next_settings.overlay.window.width as f64,
-            next_settings.overlay.window.height as f64,
-        )))
-        .map_err(|error| format!("Failed to apply window size: {error}"))?;
+    let applied = apply_window_size_and_keep_visible(
+        &window,
+        next_settings.overlay.window.width,
+        next_settings.overlay.window.height,
+    )
+    .map_err(|error| format!("Failed to apply window size: {error}"))?;
+    next_settings.overlay.window.width = applied.logical_width;
+    next_settings.overlay.window.height = applied.logical_height;
+    if let Some(position) = applied.position {
+        next_settings.overlay.window.x = Some(position.x);
+        next_settings.overlay.window.y = Some(position.y);
+    }
 
     let snapshot = {
         let mut settings = settings_state
@@ -289,6 +340,170 @@ fn spawn_debounced_settings_saver(
 fn request_debounced_save(app: &AppHandle, save_trigger: &mpsc::Sender<()>) {
     if save_trigger.send(()).is_err() {
         emit_command_error(app, "Settings saver is no longer running.".to_string());
+    }
+}
+
+struct AppliedWindowFrame {
+    logical_width: u32,
+    logical_height: u32,
+    position: Option<PhysicalPosition<i32>>,
+}
+
+#[derive(Clone, Copy)]
+struct WorkArea {
+    x: i32,
+    y: i32,
+    width: u32,
+    height: u32,
+}
+
+fn apply_window_size_and_keep_visible(
+    window: &WebviewWindow,
+    width: u32,
+    height: u32,
+) -> Result<AppliedWindowFrame, String> {
+    let monitor = target_monitor(window)?;
+    let scale_factor = monitor
+        .as_ref()
+        .map(Monitor::scale_factor)
+        .unwrap_or_else(|| window.scale_factor().unwrap_or(1.0));
+    let work_area = monitor.as_ref().map(monitor_work_area);
+    let (logical_width, logical_height) = work_area
+        .map(|work_area| clamp_logical_size_to_work_area(width, height, work_area, scale_factor))
+        .unwrap_or((width, height));
+
+    window
+        .set_size(Size::Logical(LogicalSize::new(
+            logical_width as f64,
+            logical_height as f64,
+        )))
+        .map_err(|error| format!("Failed to set window size: {error}"))?;
+
+    let Some(work_area) = work_area else {
+        return Ok(AppliedWindowFrame {
+            logical_width,
+            logical_height,
+            position: None,
+        });
+    };
+
+    let Ok(current_position) = window.outer_position() else {
+        return Ok(AppliedWindowFrame {
+            logical_width,
+            logical_height,
+            position: None,
+        });
+    };
+    let physical_size = window.outer_size().unwrap_or_else(|_| {
+        PhysicalSize::new(
+            (logical_width as f64 * scale_factor).round() as u32,
+            (logical_height as f64 * scale_factor).round() as u32,
+        )
+    });
+    let clamped_position = clamp_position_to_work_area(current_position, physical_size, work_area);
+
+    if clamped_position != current_position {
+        window
+            .set_position(Position::Physical(clamped_position))
+            .map_err(|error| format!("Failed to keep window inside display: {error}"))?;
+        Ok(AppliedWindowFrame {
+            logical_width,
+            logical_height,
+            position: Some(clamped_position),
+        })
+    } else {
+        Ok(AppliedWindowFrame {
+            logical_width,
+            logical_height,
+            position: None,
+        })
+    }
+}
+
+fn target_monitor(window: &WebviewWindow) -> Result<Option<Monitor>, String> {
+    if let Some(monitor) = window
+        .current_monitor()
+        .map_err(|error| format!("Failed to read current monitor: {error}"))?
+    {
+        return Ok(Some(monitor));
+    }
+
+    let monitors = window
+        .available_monitors()
+        .map_err(|error| format!("Failed to enumerate monitors: {error}"))?;
+    if monitors.is_empty() {
+        return Ok(None);
+    }
+
+    let position = window.outer_position().ok();
+    if let Some(position) = position {
+        if let Some(monitor) = monitors
+            .iter()
+            .find(|monitor| work_area_contains_position(monitor_work_area(monitor), position))
+        {
+            return Ok(Some(monitor.clone()));
+        }
+    }
+
+    Ok(monitors.into_iter().next())
+}
+
+fn monitor_work_area(monitor: &Monitor) -> WorkArea {
+    let work_area = monitor.work_area();
+    WorkArea {
+        x: work_area.position.x,
+        y: work_area.position.y,
+        width: work_area.size.width,
+        height: work_area.size.height,
+    }
+}
+
+fn work_area_contains_position(work_area: WorkArea, position: PhysicalPosition<i32>) -> bool {
+    position.x >= work_area.x
+        && position.x < work_area.x + work_area.width as i32
+        && position.y >= work_area.y
+        && position.y < work_area.y + work_area.height as i32
+}
+
+fn clamp_logical_size_to_work_area(
+    width: u32,
+    height: u32,
+    work_area: WorkArea,
+    scale_factor: f64,
+) -> (u32, u32) {
+    let horizontal_margin = (SCREEN_EDGE_MARGIN * 2).max(0) as f64;
+    let vertical_margin = (SCREEN_EDGE_MARGIN * 2).max(0) as f64;
+    let max_width = ((work_area.width as f64 - horizontal_margin) / scale_factor)
+        .floor()
+        .max(MIN_WINDOW_WIDTH as f64) as u32;
+    let max_height = ((work_area.height as f64 - vertical_margin) / scale_factor)
+        .floor()
+        .max(MIN_WINDOW_HEIGHT as f64) as u32;
+
+    (width.min(max_width), height.min(max_height))
+}
+
+fn clamp_position_to_work_area(
+    position: PhysicalPosition<i32>,
+    size: PhysicalSize<u32>,
+    work_area: WorkArea,
+) -> PhysicalPosition<i32> {
+    let min_x = work_area.x + SCREEN_EDGE_MARGIN;
+    let min_y = work_area.y + SCREEN_EDGE_MARGIN;
+    let max_x = work_area.x + work_area.width as i32 - size.width as i32 - SCREEN_EDGE_MARGIN;
+    let max_y = work_area.y + work_area.height as i32 - size.height as i32 - SCREEN_EDGE_MARGIN;
+
+    PhysicalPosition::new(
+        clamp_axis_position(position.x, min_x, max_x),
+        clamp_axis_position(position.y, min_y, max_y),
+    )
+}
+
+fn clamp_axis_position(value: i32, min: i32, max: i32) -> i32 {
+    if max < min {
+        min
+    } else {
+        value.clamp(min, max)
     }
 }
 
@@ -380,5 +595,57 @@ mod tests {
 
         assert!(overlay_ignores_cursor_events(&settings));
         assert!(!overlay_resizable(&settings));
+    }
+
+    #[test]
+    fn device_window_sizes_match_display_surface_shapes() {
+        assert_eq!(
+            DisplayDeviceWindowSize::Controller.dimensions(),
+            CONTROLLER_WINDOW_SIZE
+        );
+        assert_eq!(
+            DisplayDeviceWindowSize::KeyboardMouse.dimensions(),
+            KEYBOARD_MOUSE_WINDOW_SIZE
+        );
+        assert!(KEYBOARD_MOUSE_WINDOW_SIZE.1 < CONTROLLER_WINDOW_SIZE.1);
+    }
+
+    #[test]
+    fn logical_size_is_limited_to_monitor_work_area() {
+        let work_area = WorkArea {
+            x: 0,
+            y: 0,
+            width: 800,
+            height: 600,
+        };
+
+        assert_eq!(
+            clamp_logical_size_to_work_area(980, 596, work_area, 1.0),
+            (784, 584)
+        );
+        assert_eq!(
+            clamp_logical_size_to_work_area(720, 320, work_area, 2.0),
+            (420, 292)
+        );
+    }
+
+    #[test]
+    fn position_is_clamped_inside_monitor_work_area() {
+        let work_area = WorkArea {
+            x: 100,
+            y: 50,
+            width: 800,
+            height: 600,
+        };
+        let size = PhysicalSize::new(300, 200);
+
+        assert_eq!(
+            clamp_position_to_work_area(PhysicalPosition::new(780, 500), size, work_area),
+            PhysicalPosition::new(592, 442)
+        );
+        assert_eq!(
+            clamp_position_to_work_area(PhysicalPosition::new(40, 10), size, work_area),
+            PhysicalPosition::new(108, 58)
+        );
     }
 }

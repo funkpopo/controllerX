@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { useCallback, useEffect, useState } from "react";
+import type { DisplayDevice } from "../data/displayDevice";
 import type { AppSettings, ProfileInfo } from "../types/controller";
 
 type SettingsLoadState =
@@ -91,13 +92,25 @@ export function useAppSettings() {
     []
   );
 
+  const setDisplayDeviceWindowSize = useCallback(
+    async (displayDevice: DisplayDevice) => {
+      const settings = await invoke<AppSettings>("set_display_device_window_size", {
+        displayDevice
+      });
+      setState((current) =>
+        current.kind === "ready" ? { ...current, settings } : current
+      );
+    },
+    []
+  );
+
   return {
     state,
     applySettings,
     updateSettings,
     setClickThrough,
     setLockPosition,
-    setOverlaySize
+    setOverlaySize,
+    setDisplayDeviceWindowSize
   };
 }
-

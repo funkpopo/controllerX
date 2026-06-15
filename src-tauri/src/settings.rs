@@ -80,7 +80,7 @@ impl Default for AppSettings {
                 selected_preset_id: None,
                 opacity: 0.92,
                 show_controller: true,
-                show_keyboard_mouse: false,
+                show_keyboard_mouse: true,
                 click_through: false,
                 lock_position: false,
                 hide_toolbar_when_idle: false,
@@ -154,11 +154,8 @@ fn settings_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 pub fn sanitize(settings: &mut AppSettings) {
     settings.overlay.opacity = settings.overlay.opacity.clamp(0.25, 1.0);
-    if settings.overlay.show_controller && settings.overlay.show_keyboard_mouse {
-        settings.overlay.show_keyboard_mouse = false;
-    }
     if !settings.overlay.show_controller && !settings.overlay.show_keyboard_mouse {
-        settings.overlay.show_controller = true;
+        settings.overlay.show_keyboard_mouse = true;
     }
     settings.overlay.toolbar_idle_ms = settings.overlay.toolbar_idle_ms.clamp(600, 8_000);
     settings.overlay.window.width = settings.overlay.window.width.clamp(420, 2560);
@@ -194,7 +191,7 @@ mod tests {
     }
 
     #[test]
-    fn sanitize_keeps_controller_and_keyboard_mouse_modes_mutually_exclusive() {
+    fn sanitize_preserves_dual_enabled_auto_device_mode() {
         let mut both_enabled = AppSettings::default();
         both_enabled.overlay.show_controller = true;
         both_enabled.overlay.show_keyboard_mouse = true;
@@ -202,15 +199,30 @@ mod tests {
         sanitize(&mut both_enabled);
 
         assert!(both_enabled.overlay.show_controller);
-        assert!(!both_enabled.overlay.show_keyboard_mouse);
+        assert!(both_enabled.overlay.show_keyboard_mouse);
+    }
 
+    #[test]
+    fn sanitize_uses_keyboard_mouse_when_no_display_layer_is_enabled() {
         let mut both_disabled = AppSettings::default();
         both_disabled.overlay.show_controller = false;
         both_disabled.overlay.show_keyboard_mouse = false;
 
         sanitize(&mut both_disabled);
 
-        assert!(both_disabled.overlay.show_controller);
-        assert!(!both_disabled.overlay.show_keyboard_mouse);
+        assert!(!both_disabled.overlay.show_controller);
+        assert!(both_disabled.overlay.show_keyboard_mouse);
+    }
+
+    #[test]
+    fn sanitize_preserves_explicit_controller_mode() {
+        let mut settings = AppSettings::default();
+        settings.overlay.show_controller = true;
+        settings.overlay.show_keyboard_mouse = false;
+
+        sanitize(&mut settings);
+
+        assert!(settings.overlay.show_controller);
+        assert!(!settings.overlay.show_keyboard_mouse);
     }
 }

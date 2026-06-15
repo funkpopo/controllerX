@@ -17,6 +17,13 @@ import { HardwareVerificationPanel } from "./components/HardwareVerificationPane
 import { SettingsPopover } from "./components/SettingsPopover";
 import { StatePanel } from "./components/StatePanel";
 import { KeyboardMouseOverlay } from "./components/KeyboardMouseOverlay";
+import {
+  KEYBOARD_MOUSE_PRESET_VALUE,
+  applyDeviceSelection,
+  deviceSelectValue,
+  resolveDisplayDevice,
+  type DisplayDevice
+} from "./data/displayDevice";
 import { OVERLAY_PRESETS, selectPreset } from "./data/presets";
 import { useAppSettings } from "./hooks/useAppSettings";
 import { useControllerEvents } from "./hooks/useControllerEvents";
@@ -31,10 +38,10 @@ import type {
 } from "./types/controller";
 
 type OverlaySizeName = "compact" | "standard" | "large";
+type StatusKind = ControllerSnapshot["status"] | "keyboardMouse";
 
 const ERROR_TOAST_AUTO_DISMISS_MS = 6000;
 const POINTER_ACTIVITY_THROTTLE_MS = 400;
-const KEYBOARD_MOUSE_PRESET_VALUE = "__keyboard_mouse";
 
 function App() {
   const controller = useControllerState();
@@ -74,6 +81,7 @@ function App() {
       setClickThrough={settingsApi.setClickThrough}
       setLockPosition={settingsApi.setLockPosition}
       setOverlaySize={settingsApi.setOverlaySize}
+      setDisplayDeviceWindowSize={settingsApi.setDisplayDeviceWindowSize}
     />
   );
 }
@@ -87,7 +95,8 @@ function ReadyApp({
   updateSettings,
   setClickThrough,
   setLockPosition,
-  setOverlaySize
+  setOverlaySize,
+  setDisplayDeviceWindowSize
 }: {
   controller: ControllerSnapshot;
   keyboardMouse: KeyboardMouseSnapshot;
@@ -98,6 +107,7 @@ function ReadyApp({
   setClickThrough: (enabled: boolean) => Promise<void>;
   setLockPosition: (enabled: boolean) => Promise<void>;
   setOverlaySize: (size: OverlaySizeName) => Promise<void>;
+  setDisplayDeviceWindowSize: (displayDevice: DisplayDevice) => Promise<void>;
 }) {
   const [debugVisible, setDebugVisible] = useState(false);
   const [verificationVisible, setVerificationVisible] = useState(false);
@@ -106,6 +116,7 @@ function ReadyApp({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [commandError, setCommandError] = useState<string | null>(null);
   const lastPointerActivityRef = useRef(0);
+  const lastAppliedWindowDeviceRef = useRef<DisplayDevice | null>(null);
 
   const preset = useMemo(() => {
     try {
@@ -146,7 +157,17 @@ function ReadyApp({
     settings.overlay.toolbarIdleMs
   ]);
 
-  const status = statusText(controller);
+  const displayDevice = useMemo(
+    () => resolveDisplayDevice(settings, controller),
+    [
+      controller.connected,
+      settings.overlay.showController,
+      settings.overlay.showKeyboardMouse
+    ]
+  );
+  const status = statusText(displayDevice, controller, keyboardMouse);
+  const statusKind: StatusKind =
+    displayDevice === "keyboardMouse" ? "keyboardMouse" : controller.status;
 
   useEffect(() => {
     let disposed = false;
@@ -209,6 +230,18 @@ function ReadyApp({
   );
 
   useEffect(() => {
+    if (lastAppliedWindowDeviceRef.current === displayDevice) {
+      return;
+    }
+
+    lastAppliedWindowDeviceRef.current = displayDevice;
+    setDisplayDeviceWindowSize(displayDevice).catch((error: unknown) => {
+      lastAppliedWindowDeviceRef.current = null;
+      setCommandError(formatError(error));
+    });
+  }, [displayDevice, setDisplayDeviceWindowSize]);
+
+  useEffect(() => {
     if (settings.overlay.clickThrough) {
       setToolbarVisible(false);
     }
@@ -216,9 +249,8 @@ function ReadyApp({
 
   const showControls = !settings.overlay.clickThrough && !settings.overlay.obsMode;
   const showOverlayMessages = !settings.overlay.obsMode;
-  const showControllerOverlay = settings.overlay.showController;
-  const showKeyboardMouseOverlay =
-    settings.overlay.showKeyboardMouse && !settings.overlay.showController;
+  const showControllerOverlay = displayDevice === "controller";
+  const showKeyboardMouseOverlay = displayDevice === "keyboardMouse";
 
   // Stable handlers so the memoized Toolbar does not re-render on every
   // controller snapshot; they only change when the settings they read change.
@@ -277,7 +309,7 @@ function ReadyApp({
       {showControls ? (
         <Toolbar
           status={status}
-          statusKind={controller.status}
+          statusKind={statusKind}
           settings={settings}
           profiles={profiles}
           settingsOpen={settingsOpen}
@@ -363,7 +395,7 @@ function ReadyApp({
 
 type ToolbarProps = {
   status: string;
-  statusKind: ControllerSnapshot["status"];
+  statusKind: StatusKind;
   settings: AppSettings;
   profiles: ProfileInfo[];
   settingsOpen: boolean;
@@ -432,7 +464,7 @@ const Toolbar = memo(function Toolbar({
         }
         title="显示设备"
       >
-        <option value="">自动匹配手柄</option>
+        <option value="">自动识别设备</option>
         {OVERLAY_PRESETS.map((overlayPreset) => (
           <option key={overlayPreset.id} value={overlayPreset.id}>
             {overlayPreset.label}
@@ -503,7 +535,15 @@ const Toolbar = memo(function Toolbar({
   );
 });
 
-function statusText(controller: ControllerSnapshot) {
+function statusText(
+  displayDevice: DisplayDevice,
+  controller: ControllerSnapshot,
+  keyboardMouse: KeyboardMouseSnapshot
+) {
+  if (displayDevice === "keyboardMouse") {
+    return keyboardMouse.supported ? "键盘鼠标" : "键鼠采集不可用";
+  }
+
   if (controller.status === "simulated") {
     return controller.name ?? "模拟手柄";
   }
@@ -521,27 +561,6 @@ function statusText(controller: ControllerSnapshot) {
 
 function formatError(error: unknown) {
   return error instanceof Error ? error.message : String(error);
-}
-
-function deviceSelectValue(settings: AppSettings) {
-  if (settings.overlay.showKeyboardMouse && !settings.overlay.showController) {
-    return KEYBOARD_MOUSE_PRESET_VALUE;
-  }
-
-  return settings.overlay.selectedPresetId ?? "";
-}
-
-function applyDeviceSelection(settings: AppSettings, value: string) {
-  if (value === KEYBOARD_MOUSE_PRESET_VALUE) {
-    settings.overlay.selectedPresetId = null;
-    settings.overlay.showController = false;
-    settings.overlay.showKeyboardMouse = true;
-    return;
-  }
-
-  settings.overlay.selectedPresetId = value || null;
-  settings.overlay.showController = true;
-  settings.overlay.showKeyboardMouse = false;
 }
 
 function isInteractiveToolbarTarget(target: EventTarget | null) {
