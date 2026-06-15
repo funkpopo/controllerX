@@ -1,4 +1,4 @@
-export type ControllerFamily = "xbox" | "playStation" | "xInput" | "generic";
+export type ControllerFamily = "xbox" | "playStation" | "xInput";
 export type ControllerStatus = "noDevice" | "active" | "unsupported" | "simulated";
 
 export type CalibrationStatus = {
@@ -38,11 +38,9 @@ export type ProfileInfo = {
   presetId: string | null;
   matchKind:
     | "vendorProduct"
-    | "vendorFamily"
     | "xInputName"
     | "xInputDriver"
-    | "xInputApi"
-    | "genericFallback";
+    | "xInputApi";
   calibrationStatus: CalibrationStatus;
 };
 

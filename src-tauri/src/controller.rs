@@ -4,7 +4,7 @@ use std::time::{Duration, Instant};
 
 use gilrs::{Axis, Button, EventType, Gamepad, GamepadId, Gilrs};
 use serde::Serialize;
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 
 use crate::profiles::{
     device_identity, match_profile, profile_by_id, profile_info, ControllerFamily,
@@ -12,12 +12,17 @@ use crate::profiles::{
     UnsupportedDevice,
 };
 use crate::settings::{AppSettings, InputSettings, SimulationScenario};
+use crate::window_control::MAIN_WINDOW;
 use crate::xinput::{XInputPoller, XInputSnapshot};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(8);
 /// Polling cadence while nothing is connected; keeps idle CPU usage low and
 /// only delays first detection by at most this interval.
 const NO_DEVICE_POLL_INTERVAL: Duration = Duration::from_millis(120);
+/// Polling cadence while the overlay window is hidden. Input is still drained so
+/// gilrs never overflows and connect/disconnect events keep flowing, but there
+/// is no point emitting snapshots to an invisible webview at full rate.
+const HIDDEN_POLL_INTERVAL: Duration = Duration::from_millis(200);
 const IDLE_SNAPSHOT_INTERVAL: Duration = Duration::from_millis(250);
 /// Snapshots are coalesced to at most ~60 per second; the poll loop still runs
 /// at full rate so no input edge is lost, only the IPC emission is throttled.
@@ -110,6 +115,7 @@ pub fn spawn_controller_poll(app: AppHandle, settings: Arc<Mutex<AppSettings>>) 
         let mut last_active_gamepad: Option<GamepadId> = None;
         let mut pending_emit = false;
         let mut anything_connected = true;
+        let mut was_visible = true;
         let mut xinput = XInputPoller::new();
         loop {
             let settings_snapshot = match settings.lock() {
@@ -123,6 +129,16 @@ pub fn spawn_controller_poll(app: AppHandle, settings: Arc<Mutex<AppSettings>>) 
                     return;
                 }
             };
+
+            // The overlay only consumes snapshots while it is visible. When the
+            // user hides it from the tray we keep draining input but stop the
+            // high-rate IPC, then force a fresh snapshot the moment it returns.
+            let window_visible = main_window_visible(&app);
+            if window_visible && !was_visible {
+                pending_emit = true;
+            }
+            was_visible = window_visible;
+
             let mut changed = false;
             while let Some(event) = gilrs.next_event() {
                 changed = true;
@@ -169,8 +185,9 @@ pub fn spawn_controller_poll(app: AppHandle, settings: Arc<Mutex<AppSettings>>) 
                 pending_emit = true;
             }
 
-            if (pending_emit && last_emit.elapsed() >= SNAPSHOT_EMIT_MIN_INTERVAL)
-                || last_emit.elapsed() >= IDLE_SNAPSHOT_INTERVAL
+            if window_visible
+                && ((pending_emit && last_emit.elapsed() >= SNAPSHOT_EMIT_MIN_INTERVAL)
+                    || last_emit.elapsed() >= IDLE_SNAPSHOT_INTERVAL)
             {
                 let elapsed_ms = started_at.elapsed().as_millis();
                 let snapshot = if settings_snapshot.simulation.enabled {
@@ -208,15 +225,25 @@ pub fn spawn_controller_poll(app: AppHandle, settings: Arc<Mutex<AppSettings>>) 
                 pending_emit = false;
             }
 
-            let sleep_interval =
-                if anything_connected || pending_emit || settings_snapshot.simulation.enabled {
-                    POLL_INTERVAL
-                } else {
-                    NO_DEVICE_POLL_INTERVAL
-                };
+            let sleep_interval = if !window_visible {
+                HIDDEN_POLL_INTERVAL
+            } else if anything_connected || pending_emit || settings_snapshot.simulation.enabled {
+                POLL_INTERVAL
+            } else {
+                NO_DEVICE_POLL_INTERVAL
+            };
             thread::sleep(sleep_interval);
         }
     });
+}
+
+/// Reports whether the overlay window is currently visible. Defaults to `true`
+/// when the window handle or its state cannot be read, so polling never stalls
+/// on an unexpected error.
+fn main_window_visible(app: &AppHandle) -> bool {
+    app.get_webview_window(MAIN_WINDOW)
+        .and_then(|window| window.is_visible().ok())
+        .unwrap_or(true)
 }
 
 fn build_hardware_snapshot(

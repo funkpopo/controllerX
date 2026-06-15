@@ -10,7 +10,6 @@ pub enum ControllerFamily {
     Xbox,
     PlayStation,
     XInput,
-    Generic,
 }
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
@@ -23,7 +22,6 @@ pub enum ProfileId {
     DualShock4,
     DualSense,
     GenericXInput,
-    GenericGamepad,
 }
 
 impl ProfileId {
@@ -36,7 +34,6 @@ impl ProfileId {
             ProfileId::DualShock4 => "dualshock-4",
             ProfileId::DualSense => "dualsense",
             ProfileId::GenericXInput => "generic-xinput",
-            ProfileId::GenericGamepad => "generic-gamepad",
         }
     }
 
@@ -49,7 +46,6 @@ impl ProfileId {
             "dualshock-4" => Some(ProfileId::DualShock4),
             "dualsense" => Some(ProfileId::DualSense),
             "generic-xinput" => Some(ProfileId::GenericXInput),
-            "generic-gamepad" => Some(ProfileId::GenericGamepad),
             _ => None,
         }
     }
@@ -59,13 +55,9 @@ impl ProfileId {
 #[serde(rename_all = "camelCase")]
 pub enum DeviceMatchKind {
     VendorProduct,
-    /// Known vendor, unknown product id; matched to the closest family profile.
-    VendorFamily,
     XInputName,
     XInputDriver,
     XInputApi,
-    /// Unknown device; best-effort standard mapping so the overlay still works.
-    GenericFallback,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -284,21 +276,17 @@ const CALIBRATED_WITH_INCLUDED_PRESET: CalibrationStatus = CalibrationStatus {
     notes: "Static profile and preset wiring are implemented; real hardware calibration remains required.",
 };
 
-const NEEDS_DS4_ASSET: CalibrationStatus = CalibrationStatus {
+// DualShock 4 has a real input map but no dedicated visual preset; rendering is
+// withheld rather than borrowing another controller's artwork. Surfaced to the
+// user in StatePanel, so it is written in the app's UI language.
+const DUALSHOCK4_NO_PRESET_STATUS: CalibrationStatus = CalibrationStatus {
     preset_calibrated: false,
     input_map_calibrated: true,
     hardware_verified: false,
-    notes: "DualShock 4 renders with the DualSense preset as a visual approximation; no dedicated DualShock 4 PNG preset was found in input-overlay.",
+    notes: "DualShock 4 的按键映射已接入,但尚未提供专用视觉预设,因此暂不渲染外观。",
 };
 
-const GENERIC_FALLBACK_STATUS: CalibrationStatus = CalibrationStatus {
-    preset_calibrated: false,
-    input_map_calibrated: false,
-    hardware_verified: false,
-    notes: "Unknown device matched by best-effort standard mapping with the Xbox preset; some inputs may be missing or misplaced.",
-};
-
-pub const PROFILE_CATALOG: [ControllerProfile; 8] = [
+pub const PROFILE_CATALOG: [ControllerProfile; 7] = [
     ControllerProfile {
         id: ProfileId::Xbox360,
         display_name: "Xbox 360 Controller",
@@ -343,12 +331,13 @@ pub const PROFILE_CATALOG: [ControllerProfile; 8] = [
         id: ProfileId::DualShock4,
         display_name: "DualShock 4",
         family: ControllerFamily::PlayStation,
-        // Visual approximation until a dedicated DualShock 4 asset is sourced.
-        preset_id: Some("dualsense"),
+        // No dedicated DualShock 4 asset exists yet; render nothing rather than
+        // borrowing the DualSense artwork.
+        preset_id: None,
         match_kind: DeviceMatchKind::VendorProduct,
         input_map: DUALSHOCK4_MAP,
         transform: STANDARD_TRANSFORM,
-        calibration_status: NEEDS_DS4_ASSET,
+        calibration_status: DUALSHOCK4_NO_PRESET_STATUS,
     },
     ControllerProfile {
         id: ProfileId::DualSense,
@@ -369,16 +358,6 @@ pub const PROFILE_CATALOG: [ControllerProfile; 8] = [
         input_map: STANDARD_MAP,
         transform: STANDARD_TRANSFORM,
         calibration_status: CALIBRATED_WITH_INCLUDED_PRESET,
-    },
-    ControllerProfile {
-        id: ProfileId::GenericGamepad,
-        display_name: "Generic Gamepad (best effort)",
-        family: ControllerFamily::Generic,
-        preset_id: Some("xbox-controller"),
-        match_kind: DeviceMatchKind::GenericFallback,
-        input_map: STANDARD_MAP,
-        transform: STANDARD_TRANSFORM,
-        calibration_status: GENERIC_FALLBACK_STATUS,
     },
 ];
 
@@ -526,9 +505,6 @@ pub fn profile_catalog() -> Vec<ProfileInfo> {
     PROFILE_CATALOG.iter().map(profile_info).collect()
 }
 
-const VENDOR_SONY: u16 = 0x054c;
-const VENDOR_MICROSOFT: u16 = 0x045e;
-
 pub fn match_profile(identity: &DeviceIdentity) -> Result<ControllerProfile, UnsupportedDevice> {
     if let (Some(vendor_id), Some(product_id)) = (identity.vendor_id, identity.product_id) {
         if let Some(profile) = match_vendor_product(vendor_id, product_id) {
@@ -555,27 +531,26 @@ pub fn match_profile(identity: &DeviceIdentity) -> Result<ControllerProfile, Uns
         );
     }
 
-    // Known vendor with an unknown product id: fall back to the closest
-    // family profile so newer hardware still gets a sensible mapping.
-    match identity.vendor_id {
-        Some(VENDOR_SONY) => {
-            return profile_by_id_with_match_kind(
-                ProfileId::DualShock4,
-                DeviceMatchKind::VendorFamily,
-            );
-        }
-        Some(VENDOR_MICROSOFT) => {
-            return profile_by_id_with_match_kind(
-                ProfileId::XboxSeries,
-                DeviceMatchKind::VendorFamily,
-            );
-        }
-        _ => {}
-    }
+    // No exact VID/PID match and no XInput evidence: report the device as
+    // unsupported instead of guessing a mapping. The reason is surfaced to the
+    // user in StatePanel, so it is written in the app's UI language.
+    Err(UnsupportedDevice {
+        reason: unsupported_reason(identity),
+        identity: identity.clone(),
+    })
+}
 
-    // The device was still reported as a gamepad by gilrs, so read it with the
-    // best-effort standard mapping instead of rejecting it outright.
-    profile_by_id_with_match_kind(ProfileId::GenericGamepad, DeviceMatchKind::GenericFallback)
+fn unsupported_reason(identity: &DeviceIdentity) -> String {
+    match (identity.vendor_id, identity.product_id) {
+        (Some(vendor_id), Some(product_id)) => format!(
+            "未识别的手柄“{}”(VID {vendor_id:04x} / PID {product_id:04x})。未匹配到已知配置,且没有 XInput 证据,暂不支持。",
+            identity.name
+        ),
+        _ => format!(
+            "未识别的手柄“{}”。未匹配到已知配置,且没有 XInput 证据,暂不支持。",
+            identity.name
+        ),
+    }
 }
 
 pub fn profile_by_id(profile_id: ProfileId) -> Result<ControllerProfile, UnsupportedDevice> {
@@ -752,33 +727,45 @@ mod tests {
     }
 
     #[test]
-    fn unknown_device_falls_back_to_generic_gamepad() {
-        let profile = match_profile(&identity(Some(0x1234), Some(0xabcd), "Unknown")).unwrap();
-        assert_eq!(profile.id, ProfileId::GenericGamepad);
-        assert_eq!(profile.match_kind, DeviceMatchKind::GenericFallback);
-        assert_eq!(profile.preset_id, Some("xbox-controller"));
-        assert!(!profile.calibration_status.input_map_calibrated);
+    fn unknown_device_without_xinput_evidence_is_unsupported() {
+        let result = match_profile(&identity(Some(0x1234), Some(0xabcd), "Unknown"));
+        let unsupported = result.expect_err("unknown device must not be matched");
+        assert!(unsupported.reason.contains("1234"));
+        assert!(unsupported.reason.contains("abcd"));
     }
 
     #[test]
-    fn unknown_sony_product_falls_back_to_dualshock4_family() {
-        let profile =
-            match_profile(&identity(Some(0x054c), Some(0x9999), "Wireless Controller")).unwrap();
-        assert_eq!(profile.id, ProfileId::DualShock4);
-        assert_eq!(profile.match_kind, DeviceMatchKind::VendorFamily);
+    fn unknown_sony_product_is_unsupported() {
+        let result = match_profile(&identity(Some(0x054c), Some(0x9999), "Wireless Controller"));
+        assert!(
+            result.is_err(),
+            "an unknown Sony product id must not be guessed into a DualShock profile"
+        );
     }
 
     #[test]
-    fn unknown_microsoft_product_falls_back_to_xbox_family() {
-        let profile = match_profile(&identity(Some(0x045e), Some(0x9999), "Controller")).unwrap();
-        assert_eq!(profile.id, ProfileId::XboxSeries);
-        assert_eq!(profile.match_kind, DeviceMatchKind::VendorFamily);
+    fn unknown_microsoft_product_is_unsupported() {
+        let result = match_profile(&identity(Some(0x045e), Some(0x9999), "Controller"));
+        assert!(
+            result.is_err(),
+            "an unknown Microsoft product id must not be guessed into an Xbox profile"
+        );
     }
 
     #[test]
-    fn dualshock4_uses_dualsense_preset_as_visual_approximation() {
+    fn unknown_named_xinput_device_still_matches_generic_xinput() {
+        // Removing the blind fallback must not regress genuine XInput evidence.
+        let profile = match_profile(&identity(None, None, "Some XInput Pad")).unwrap();
+        assert_eq!(profile.id, ProfileId::GenericXInput);
+        assert_eq!(profile.match_kind, DeviceMatchKind::XInputName);
+    }
+
+    #[test]
+    fn dualshock4_has_input_map_but_no_visual_preset() {
         let profile = match_profile(&identity(Some(0x054c), Some(0x09cc), "Controller")).unwrap();
-        assert_eq!(profile.preset_id, Some("dualsense"));
+        assert_eq!(profile.id, ProfileId::DualShock4);
+        assert_eq!(profile.preset_id, None);
+        assert!(profile.calibration_status.input_map_calibrated);
         assert!(!profile.calibration_status.preset_calibrated);
     }
 }

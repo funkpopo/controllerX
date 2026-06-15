@@ -10,10 +10,10 @@ export function DebugPanel({ controller, deviceEvents }: DebugPanelProps) {
     <aside className="debug-panel">
       <div className="debug-header">
         <span>{controller.status}</span>
-        <span>{controller.profile?.id ?? "no-profile"}</span>
+        <span>{controller.profile?.id ?? "无配置"}</span>
       </div>
       <ValueGrid
-        title="Buttons"
+        title="按键"
         values={{
           south: controller.buttons.south,
           east: controller.buttons.east,
@@ -41,7 +41,7 @@ export function DebugPanel({ controller, deviceEvents }: DebugPanelProps) {
         }}
       />
       <ValueGrid
-        title="Axes"
+        title="摇杆/轴"
         values={{
           lx: controller.axes.leftStickX,
           ly: controller.axes.leftStickY,
@@ -73,7 +73,7 @@ export function DebugPanel({ controller, deviceEvents }: DebugPanelProps) {
         </div>
       ) : null}
       <section className="debug-section">
-        <h2>Device events</h2>
+        <h2>设备事件</h2>
         <div className="debug-events">
           {deviceEvents.length > 0 ? (
             deviceEvents.map((event) => (
@@ -83,7 +83,7 @@ export function DebugPanel({ controller, deviceEvents }: DebugPanelProps) {
               </div>
             ))
           ) : (
-            <p>No device events received.</p>
+            <p>暂无设备事件。</p>
           )}
         </div>
       </section>

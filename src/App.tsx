@@ -10,7 +10,7 @@ import {
   Unlock,
   X
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ControllerOverlay } from "./components/ControllerOverlay";
 import { DebugPanel } from "./components/DebugPanel";
 import { HardwareVerificationPanel } from "./components/HardwareVerificationPanel";
@@ -178,15 +178,21 @@ function ReadyApp({
     return () => window.clearTimeout(timeout);
   }, [commandError]);
 
-  const update = (edit: (settings: AppSettings) => AppSettings) =>
-    updateSettings(edit).catch((error: unknown) => {
-      setCommandError(formatError(error));
-    });
+  const update = useCallback(
+    (edit: (settings: AppSettings) => AppSettings) =>
+      updateSettings(edit).catch((error: unknown) => {
+        setCommandError(formatError(error));
+      }),
+    [updateSettings]
+  );
 
-  const runCommand = (command: Promise<void>) =>
-    command.catch((error: unknown) => {
-      setCommandError(formatError(error));
-    });
+  const runCommand = useCallback(
+    (command: Promise<void>) =>
+      command.catch((error: unknown) => {
+        setCommandError(formatError(error));
+      }),
+    []
+  );
 
   useEffect(() => {
     if (settings.overlay.clickThrough) {
@@ -194,15 +200,31 @@ function ReadyApp({
     }
   }, [settings.overlay.clickThrough]);
 
-  const toolbarTitle = settings.overlay.lockPosition ? "位置已锁定" : "拖动工具栏移动窗口";
   const showControls = !settings.overlay.clickThrough && !settings.overlay.obsMode;
   const showOverlayMessages = !settings.overlay.obsMode;
 
-  const toggleClickThrough = () =>
-    runCommand(setClickThrough(!settings.overlay.clickThrough));
+  // Stable handlers so the memoized Toolbar does not re-render on every
+  // controller snapshot; they only change when the settings they read change.
+  const toggleClickThrough = useCallback(
+    () => runCommand(setClickThrough(!settings.overlay.clickThrough)),
+    [runCommand, setClickThrough, settings.overlay.clickThrough]
+  );
 
-  const toggleLockPosition = () =>
-    runCommand(setLockPosition(!settings.overlay.lockPosition));
+  const toggleLockPosition = useCallback(
+    () => runCommand(setLockPosition(!settings.overlay.lockPosition)),
+    [runCommand, setLockPosition, settings.overlay.lockPosition]
+  );
+
+  const handleSetSize = useCallback(
+    (size: OverlaySizeName) => runCommand(setOverlaySize(size)),
+    [runCommand, setOverlaySize]
+  );
+
+  const toggleDebug = useCallback(() => setDebugVisible((value) => !value), []);
+  const toggleVerification = useCallback(
+    () => setVerificationVisible((value) => !value),
+    []
+  );
 
   const appClassName = [
     "app",
@@ -236,107 +258,22 @@ function ReadyApp({
       }}
     >
       {showControls ? (
-        <div
-          className="toolbar"
-          title={toolbarTitle}
-          onPointerDown={(event) => {
-            if (
-              settings.overlay.lockPosition ||
-              event.button !== 0 ||
-              isInteractiveToolbarTarget(event.target)
-            ) {
-              return;
-            }
-
-            void getCurrentWindow().startDragging();
-          }}
-        >
-          <div className="device-status" title={status}>
-            <span className={`status-dot status-${controller.status}`} />
-            {controller.status === "simulated" ? (
-              <span className="status-chip">模拟</span>
-            ) : null}
-            <span className="status-text">{status}</span>
-          </div>
-
-          <select
-            className="preset-select"
-            value={settings.overlay.selectedPresetId ?? ""}
-            onChange={(event) =>
-              void update((next) => {
-                next.overlay.selectedPresetId = event.target.value || null;
-                return next;
-              })
-            }
-            title="视觉预设"
-          >
-            <option value="">自动匹配</option>
-            {OVERLAY_PRESETS.map((overlayPreset) => (
-              <option key={overlayPreset.id} value={overlayPreset.id}>
-                {overlayPreset.label}
-              </option>
-            ))}
-          </select>
-
-          <SettingsPopover
-            settings={settings}
-            profiles={profiles}
-            open={settingsOpen}
-            onOpenChange={setSettingsOpen}
-            onUpdate={(edit) => void update(edit)}
-            onSetSize={(size) => runCommand(setOverlaySize(size))}
-          />
-
-          <button
-            className={`icon-button ${settings.overlay.clickThrough ? "active" : ""}`}
-            aria-label="鼠标穿透"
-            title="鼠标穿透(开启后通过托盘菜单恢复)"
-            onClick={toggleClickThrough}
-          >
-            <MousePointer2 size={16} />
-          </button>
-          <button
-            className={`icon-button ${settings.overlay.lockPosition ? "active" : ""}`}
-            aria-label="锁定位置"
-            title="锁定位置"
-            onClick={toggleLockPosition}
-          >
-            {settings.overlay.lockPosition ? <Lock size={16} /> : <Unlock size={16} />}
-          </button>
-          <button
-            className={`icon-button ${settings.overlay.hideToolbarWhenIdle ? "active" : ""}`}
-            aria-label="闲置隐藏工具条"
-            title="闲置隐藏工具条"
-            onClick={() =>
-              void update((next) => {
-                next.overlay.hideToolbarWhenIdle = !next.overlay.hideToolbarWhenIdle;
-                return next;
-              })
-            }
-          >
-            {settings.overlay.hideToolbarWhenIdle ? (
-              <EyeOff size={16} />
-            ) : (
-              <PanelTopClose size={16} />
-            )}
-          </button>
-          <button
-            className={`icon-button ${debugVisible ? "active" : ""}`}
-            aria-label="调试面板"
-            title="调试面板"
-            onClick={() => setDebugVisible((value) => !value)}
-          >
-            <Bug size={16} />
-          </button>
-          <button
-            className={`icon-button ${verificationVisible ? "active" : ""}`}
-            aria-label="硬件验证"
-            title="硬件验证"
-            onClick={() => setVerificationVisible((value) => !value)}
-          >
-            <ListChecks size={16} />
-          </button>
-        </div>
+        <Toolbar
+          status={status}
+          statusKind={controller.status}
+          settings={settings}
+          profiles={profiles}
+          settingsOpen={settingsOpen}
+          debugVisible={debugVisible}
+          verificationVisible={verificationVisible}
+          onUpdate={update}
+          onSetSize={handleSetSize}
+          onToggleClickThrough={toggleClickThrough}
+          onToggleLockPosition={toggleLockPosition}
+          onSettingsOpenChange={setSettingsOpen}
+          onToggleDebug={toggleDebug}
+          onToggleVerification={toggleVerification}
+        />
       ) : null}
 
       <section className="overlay-workspace">
@@ -390,6 +327,147 @@ function ReadyApp({
     </main>
   );
 }
+
+type ToolbarProps = {
+  status: string;
+  statusKind: ControllerSnapshot["status"];
+  settings: AppSettings;
+  profiles: ProfileInfo[];
+  settingsOpen: boolean;
+  debugVisible: boolean;
+  verificationVisible: boolean;
+  onUpdate: (edit: (settings: AppSettings) => AppSettings) => void;
+  onSetSize: (size: OverlaySizeName) => void;
+  onToggleClickThrough: () => void;
+  onToggleLockPosition: () => void;
+  onSettingsOpenChange: (open: boolean) => void;
+  onToggleDebug: () => void;
+  onToggleVerification: () => void;
+};
+
+// Memoized so controller snapshots (up to ~60/s) don't re-render the toolbar:
+// none of its props depend on the live controller state except the already-
+// stable status string.
+const Toolbar = memo(function Toolbar({
+  status,
+  statusKind,
+  settings,
+  profiles,
+  settingsOpen,
+  debugVisible,
+  verificationVisible,
+  onUpdate,
+  onSetSize,
+  onToggleClickThrough,
+  onToggleLockPosition,
+  onSettingsOpenChange,
+  onToggleDebug,
+  onToggleVerification
+}: ToolbarProps) {
+  const toolbarTitle = settings.overlay.lockPosition ? "位置已锁定" : "拖动工具栏移动窗口";
+
+  return (
+    <div
+      className="toolbar"
+      title={toolbarTitle}
+      onPointerDown={(event) => {
+        if (
+          settings.overlay.lockPosition ||
+          event.button !== 0 ||
+          isInteractiveToolbarTarget(event.target)
+        ) {
+          return;
+        }
+
+        void getCurrentWindow().startDragging();
+      }}
+    >
+      <div className="device-status" title={status}>
+        <span className={`status-dot status-${statusKind}`} />
+        {statusKind === "simulated" ? <span className="status-chip">模拟</span> : null}
+        <span className="status-text">{status}</span>
+      </div>
+
+      <select
+        className="preset-select"
+        value={settings.overlay.selectedPresetId ?? ""}
+        onChange={(event) =>
+          void onUpdate((next) => {
+            next.overlay.selectedPresetId = event.target.value || null;
+            return next;
+          })
+        }
+        title="视觉预设"
+      >
+        <option value="">自动匹配</option>
+        {OVERLAY_PRESETS.map((overlayPreset) => (
+          <option key={overlayPreset.id} value={overlayPreset.id}>
+            {overlayPreset.label}
+          </option>
+        ))}
+      </select>
+
+      <SettingsPopover
+        settings={settings}
+        profiles={profiles}
+        open={settingsOpen}
+        onOpenChange={onSettingsOpenChange}
+        onUpdate={onUpdate}
+        onSetSize={onSetSize}
+      />
+
+      <button
+        className={`icon-button ${settings.overlay.clickThrough ? "active" : ""}`}
+        aria-label="鼠标穿透"
+        title="鼠标穿透(开启后通过托盘菜单恢复)"
+        onClick={onToggleClickThrough}
+      >
+        <MousePointer2 size={16} />
+      </button>
+      <button
+        className={`icon-button ${settings.overlay.lockPosition ? "active" : ""}`}
+        aria-label="锁定位置"
+        title="锁定位置"
+        onClick={onToggleLockPosition}
+      >
+        {settings.overlay.lockPosition ? <Lock size={16} /> : <Unlock size={16} />}
+      </button>
+      <button
+        className={`icon-button ${settings.overlay.hideToolbarWhenIdle ? "active" : ""}`}
+        aria-label="闲置隐藏工具条"
+        title="闲置隐藏工具条"
+        onClick={() =>
+          void onUpdate((next) => {
+            next.overlay.hideToolbarWhenIdle = !next.overlay.hideToolbarWhenIdle;
+            return next;
+          })
+        }
+      >
+        {settings.overlay.hideToolbarWhenIdle ? (
+          <EyeOff size={16} />
+        ) : (
+          <PanelTopClose size={16} />
+        )}
+      </button>
+      <button
+        className={`icon-button ${debugVisible ? "active" : ""}`}
+        aria-label="调试面板"
+        title="调试面板"
+        onClick={onToggleDebug}
+      >
+        <Bug size={16} />
+      </button>
+      <button
+        className={`icon-button ${verificationVisible ? "active" : ""}`}
+        aria-label="硬件验证"
+        title="硬件验证"
+        onClick={onToggleVerification}
+      >
+        <ListChecks size={16} />
+      </button>
+    </div>
+  );
+});
 
 function statusText(controller: ControllerSnapshot) {
   if (controller.status === "simulated") {

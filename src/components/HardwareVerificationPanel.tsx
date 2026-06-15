@@ -41,9 +41,9 @@ type SavedHardwareVerificationReport = {
 
 const CONNECTION_OPTIONS = [
   { value: "usb", label: "USB" },
-  { value: "bluetooth", label: "Bluetooth" },
-  { value: "wireless-receiver", label: "Wireless receiver" },
-  { value: "driver-supported-wireless", label: "Driver wireless" }
+  { value: "bluetooth", label: "蓝牙" },
+  { value: "wireless-receiver", label: "无线接收器" },
+  { value: "driver-supported-wireless", label: "驱动无线" }
 ];
 
 export function HardwareVerificationPanel({
@@ -131,7 +131,7 @@ export function HardwareVerificationPanel({
   const connectCaptured = hasRealConnectEvent(sessionDeviceEvents);
   const disconnectCaptured = hasRealDisconnectEvent(sessionDeviceEvents);
   const observedProfileId =
-    observation?.profile?.id ?? controller.profile?.id ?? "not-detected";
+    observation?.profile?.id ?? controller.profile?.id ?? "未检测到";
   const profileMatches =
     expectedProfileId.length > 0 && observedProfileId === expectedProfileId;
 
@@ -199,7 +199,7 @@ export function HardwareVerificationPanel({
     <aside className="verification-panel">
       <div className="verification-header">
         <div>
-          <span>Hardware verification</span>
+          <span>硬件验证</span>
           <strong>{observedProfileId}</strong>
         </div>
         <div className="verification-actions">
@@ -227,7 +227,7 @@ export function HardwareVerificationPanel({
 
       <div className="verification-config">
         <label>
-          <span>Profile</span>
+          <span>配置</span>
           <select
             value={expectedProfileId}
             onChange={(event) => setExpectedProfileId(event.target.value)}
@@ -240,7 +240,7 @@ export function HardwareVerificationPanel({
           </select>
         </label>
         <label>
-          <span>Link</span>
+          <span>连接方式</span>
           <select value={connection} onChange={(event) => setConnection(event.target.value)}>
             {CONNECTION_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -250,57 +250,57 @@ export function HardwareVerificationPanel({
           </select>
         </label>
         <label>
-          <span>Tester</span>
+          <span>测试者</span>
           <input value={tester} onChange={(event) => setTester(event.target.value)} />
         </label>
       </div>
 
       <div className="verification-summary">
-        <StatusPill active={profileMatches} label="Profile" />
-        <StatusPill active={connectCaptured} label="Connect" />
-        <StatusPill active={disconnectCaptured} label="Disconnect" />
+        <StatusPill active={profileMatches} label="配置匹配" />
+        <StatusPill active={connectCaptured} label="连接" />
+        <StatusPill active={disconnectCaptured} label="断开" />
         <StatusPill
           active={!simulationSeen}
-          label={simulationSeen ? "Simulation seen" : "Hardware only"}
+          label={simulationSeen ? "检测到模拟" : "仅真实硬件"}
         />
       </div>
 
       <ProgressLine
-        label="Buttons"
+        label="按键"
         value={coverageSummary.buttonCovered}
         total={coverageSummary.buttonTotal}
       />
       <ProgressLine
-        label="Axes"
+        label="摇杆/轴"
         value={coverageSummary.axisCovered}
         total={coverageSummary.axisTotal}
       />
-      <ProgressLine label="Manual" value={manualCovered} total={manualTotal} />
+      <ProgressLine label="人工检查" value={manualCovered} total={manualTotal} />
 
       <section className="verification-section">
-        <h2>Required buttons</h2>
+        <h2>必测按键</h2>
         <div className="verification-grid">
           {requiredButtons.map((button) => (
             <span key={button.key} className={coverage.buttons[button.key] ? "complete" : ""}>
-              {button.label}
+              {button.cn}
             </span>
           ))}
         </div>
       </section>
 
       <section className="verification-section">
-        <h2>All button fields</h2>
+        <h2>全部按键字段</h2>
         <div className="verification-grid">
           {BUTTON_INPUTS.map((button) => (
             <span key={button.key} className={coverage.buttons[button.key] ? "complete" : ""}>
-              {button.label}
+              {button.cn}
             </span>
           ))}
         </div>
       </section>
 
       <section className="verification-section">
-        <h2>Axes</h2>
+        <h2>摇杆/轴</h2>
         <div className="verification-grid">
           {AXIS_REQUIREMENTS.map((requirement) => (
             <span
@@ -309,14 +309,14 @@ export function HardwareVerificationPanel({
                 isAxisRequirementCovered(requirement, coverage.axes) ? "complete" : ""
               }
             >
-              {requirement.label}
+              {requirement.cn}
             </span>
           ))}
         </div>
       </section>
 
       <section className="verification-section">
-        <h2>Ranges</h2>
+        <h2>量程</h2>
         <div className="range-table">
           {AXIS_KEYS.map((axis) => {
             const stats = coverage.axes[axis];
@@ -333,20 +333,20 @@ export function HardwareVerificationPanel({
       </section>
 
       <ManualCheckGroup
-        title="Visual"
+        title="视觉"
         checks={VISUAL_CHECKS}
         values={manualChecks}
         onToggle={toggleManualCheck}
       />
       <ManualCheckGroup
-        title="Window"
+        title="窗口"
         checks={WINDOW_CHECKS}
         values={manualChecks}
         onToggle={toggleManualCheck}
       />
 
       <label className="verification-notes">
-        <span>Notes</span>
+        <span>备注</span>
         <textarea value={notes} onChange={(event) => setNotes(event.target.value)} />
       </label>
 
@@ -390,7 +390,7 @@ function ManualCheckGroup({
   onToggle
 }: {
   title: string;
-  checks: readonly { id: ManualCheckId; label: string }[];
+  checks: readonly { id: ManualCheckId; label: string; cn: string }[];
   values: ManualChecks;
   onToggle: (id: ManualCheckId) => void;
 }) {
@@ -405,7 +405,7 @@ function ManualCheckGroup({
               checked={values[check.id]}
               onChange={() => onToggle(check.id)}
             />
-            <span>{check.label}</span>
+            <span>{check.cn}</span>
           </label>
         ))}
       </div>

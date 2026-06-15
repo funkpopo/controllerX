@@ -7,35 +7,39 @@ import type {
   ProfileInfo
 } from "../types/controller";
 
-export type ButtonInput = { key: keyof ControllerButtons; label: string };
+// `label` is the English identifier written into the saved verification report
+// (a machine-validated, script-parsed contract). `cn` is the Chinese label
+// shown in the on-screen panel. Keep the two separate so translating the UI
+// never changes the report format.
+export type ButtonInput = { key: keyof ControllerButtons; label: string; cn: string };
 
 export const STANDARD_BUTTON_INPUTS = [
-  { key: "south", label: "South" },
-  { key: "east", label: "East" },
-  { key: "west", label: "West" },
-  { key: "north", label: "North" },
-  { key: "leftBumper", label: "Left bumper" },
-  { key: "rightBumper", label: "Right bumper" },
-  { key: "select", label: "Select / Share / Back" },
-  { key: "start", label: "Start / Options / Menu" },
-  { key: "mode", label: "Mode / Guide / PS" },
-  { key: "leftThumb", label: "Left thumb" },
-  { key: "rightThumb", label: "Right thumb" },
-  { key: "dpadUp", label: "D-Pad up" },
-  { key: "dpadDown", label: "D-Pad down" },
-  { key: "dpadLeft", label: "D-Pad left" },
-  { key: "dpadRight", label: "D-Pad right" }
+  { key: "south", label: "South", cn: "下面键 (A/×)" },
+  { key: "east", label: "East", cn: "右面键 (B/○)" },
+  { key: "west", label: "West", cn: "左面键 (X/□)" },
+  { key: "north", label: "North", cn: "上面键 (Y/△)" },
+  { key: "leftBumper", label: "Left bumper", cn: "左肩键 (LB)" },
+  { key: "rightBumper", label: "Right bumper", cn: "右肩键 (RB)" },
+  { key: "select", label: "Select / Share / Back", cn: "选择/分享键 (Select)" },
+  { key: "start", label: "Start / Options / Menu", cn: "开始/选项键 (Start)" },
+  { key: "mode", label: "Mode / Guide / PS", cn: "主页/导航键 (Guide/PS)" },
+  { key: "leftThumb", label: "Left thumb", cn: "左摇杆按下 (L3)" },
+  { key: "rightThumb", label: "Right thumb", cn: "右摇杆按下 (R3)" },
+  { key: "dpadUp", label: "D-Pad up", cn: "十字键 上" },
+  { key: "dpadDown", label: "D-Pad down", cn: "十字键 下" },
+  { key: "dpadLeft", label: "D-Pad left", cn: "十字键 左" },
+  { key: "dpadRight", label: "D-Pad right", cn: "十字键 右" }
 ] as const satisfies ReadonlyArray<ButtonInput>;
 
 export const OPTIONAL_BUTTON_INPUTS = [
-  { key: "leftTriggerButton", label: "Left trigger button" },
-  { key: "rightTriggerButton", label: "Right trigger button" },
-  { key: "misc1", label: "Misc 1 / DualSense mute" },
-  { key: "paddle1", label: "Paddle 1" },
-  { key: "paddle2", label: "Paddle 2" },
-  { key: "paddle3", label: "Paddle 3" },
-  { key: "paddle4", label: "Paddle 4" },
-  { key: "touchpad", label: "Touchpad button" }
+  { key: "leftTriggerButton", label: "Left trigger button", cn: "左扳机按下 (LT)" },
+  { key: "rightTriggerButton", label: "Right trigger button", cn: "右扳机按下 (RT)" },
+  { key: "misc1", label: "Misc 1 / DualSense mute", cn: "Misc1 / DualSense 静音键" },
+  { key: "paddle1", label: "Paddle 1", cn: "背键 1" },
+  { key: "paddle2", label: "Paddle 2", cn: "背键 2" },
+  { key: "paddle3", label: "Paddle 3", cn: "背键 3" },
+  { key: "paddle4", label: "Paddle 4", cn: "背键 4" },
+  { key: "touchpad", label: "Touchpad button", cn: "触摸板按键" }
 ] as const satisfies ReadonlyArray<ButtonInput>;
 
 export const BUTTON_INPUTS = [
@@ -59,6 +63,7 @@ export const AXIS_REQUIREMENTS = [
     id: "leftStickXNegative",
     axis: "leftStickX",
     label: "Left stick X negative",
+    cn: "左摇杆 X 负向(左)",
     kind: "negative",
     threshold: 0.75
   },
@@ -66,6 +71,7 @@ export const AXIS_REQUIREMENTS = [
     id: "leftStickXPositive",
     axis: "leftStickX",
     label: "Left stick X positive",
+    cn: "左摇杆 X 正向(右)",
     kind: "positive",
     threshold: 0.75
   },
@@ -73,6 +79,7 @@ export const AXIS_REQUIREMENTS = [
     id: "leftStickYNegative",
     axis: "leftStickY",
     label: "Left stick Y negative",
+    cn: "左摇杆 Y 负向(上)",
     kind: "negative",
     threshold: 0.75
   },
@@ -80,6 +87,7 @@ export const AXIS_REQUIREMENTS = [
     id: "leftStickYPositive",
     axis: "leftStickY",
     label: "Left stick Y positive",
+    cn: "左摇杆 Y 正向(下)",
     kind: "positive",
     threshold: 0.75
   },
@@ -87,6 +95,7 @@ export const AXIS_REQUIREMENTS = [
     id: "rightStickXNegative",
     axis: "rightStickX",
     label: "Right stick X negative",
+    cn: "右摇杆 X 负向(左)",
     kind: "negative",
     threshold: 0.75
   },
@@ -94,6 +103,7 @@ export const AXIS_REQUIREMENTS = [
     id: "rightStickXPositive",
     axis: "rightStickX",
     label: "Right stick X positive",
+    cn: "右摇杆 X 正向(右)",
     kind: "positive",
     threshold: 0.75
   },
@@ -101,6 +111,7 @@ export const AXIS_REQUIREMENTS = [
     id: "rightStickYNegative",
     axis: "rightStickY",
     label: "Right stick Y negative",
+    cn: "右摇杆 Y 负向(上)",
     kind: "negative",
     threshold: 0.75
   },
@@ -108,6 +119,7 @@ export const AXIS_REQUIREMENTS = [
     id: "rightStickYPositive",
     axis: "rightStickY",
     label: "Right stick Y positive",
+    cn: "右摇杆 Y 正向(下)",
     kind: "positive",
     threshold: 0.75
   },
@@ -115,6 +127,7 @@ export const AXIS_REQUIREMENTS = [
     id: "leftTriggerGradual",
     axis: "leftTrigger",
     label: "Left trigger gradual pressure",
+    cn: "左扳机渐进压力",
     kind: "trigger",
     threshold: 0.9,
     partialMin: 0.12,
@@ -124,6 +137,7 @@ export const AXIS_REQUIREMENTS = [
     id: "rightTriggerGradual",
     axis: "rightTrigger",
     label: "Right trigger gradual pressure",
+    cn: "右扳机渐进压力",
     kind: "trigger",
     threshold: 0.9,
     partialMin: 0.12,
@@ -133,6 +147,7 @@ export const AXIS_REQUIREMENTS = [
     id: "dpadXNegative",
     axis: "dpadX",
     label: "D-Pad axis left",
+    cn: "十字键轴 左",
     kind: "negative",
     threshold: 0.75
   },
@@ -140,6 +155,7 @@ export const AXIS_REQUIREMENTS = [
     id: "dpadXPositive",
     axis: "dpadX",
     label: "D-Pad axis right",
+    cn: "十字键轴 右",
     kind: "positive",
     threshold: 0.75
   },
@@ -147,6 +163,7 @@ export const AXIS_REQUIREMENTS = [
     id: "dpadYNegative",
     axis: "dpadY",
     label: "D-Pad axis up",
+    cn: "十字键轴 上",
     kind: "negative",
     threshold: 0.75
   },
@@ -154,6 +171,7 @@ export const AXIS_REQUIREMENTS = [
     id: "dpadYPositive",
     axis: "dpadY",
     label: "D-Pad axis down",
+    cn: "十字键轴 下",
     kind: "positive",
     threshold: 0.75
   }
@@ -161,6 +179,7 @@ export const AXIS_REQUIREMENTS = [
   id: string;
   axis: keyof ControllerAxes;
   label: string;
+  cn: string;
   kind: "positive" | "negative" | "trigger";
   threshold: number;
   partialMin?: number;
@@ -168,24 +187,24 @@ export const AXIS_REQUIREMENTS = [
 }>;
 
 export const VISUAL_CHECKS = [
-  { id: "autoProfile", label: "Auto profile selected expected profile" },
-  { id: "visualPreset", label: "Visual preset matches sourced PNG state" },
-  { id: "leftStickDirection", label: "Left stick visual direction verified" },
-  { id: "rightStickDirection", label: "Right stick visual direction verified" },
-  { id: "dpadVisual", label: "D-Pad visual state verified" },
-  { id: "triggerVisual", label: "Trigger partial-pressure visual state verified" },
-  { id: "noVisualFallback", label: "No replacement controller image used" }
+  { id: "autoProfile", label: "Auto profile selected expected profile", cn: "自动匹配到预期配置" },
+  { id: "visualPreset", label: "Visual preset matches sourced PNG state", cn: "视觉预设与素材 PNG 状态一致" },
+  { id: "leftStickDirection", label: "Left stick visual direction verified", cn: "左摇杆视觉方向已核对" },
+  { id: "rightStickDirection", label: "Right stick visual direction verified", cn: "右摇杆视觉方向已核对" },
+  { id: "dpadVisual", label: "D-Pad visual state verified", cn: "十字键视觉状态已核对" },
+  { id: "triggerVisual", label: "Trigger partial-pressure visual state verified", cn: "扳机半按视觉状态已核对" },
+  { id: "noVisualFallback", label: "No replacement controller image used", cn: "未使用替代手柄图像" }
 ] as const;
 
 export const WINDOW_CHECKS = [
-  { id: "transparent", label: "Transparent background visible" },
-  { id: "alwaysOnTop", label: "Window stays always on top" },
-  { id: "taskbar", label: "Taskbar entry exists" },
-  { id: "tray", label: "Tray show/hide works" },
-  { id: "clickThrough", label: "Click-through passes mouse events" },
-  { id: "lockPosition", label: "Lock-position prevents resize/move changes" },
-  { id: "persistence", label: "Position and size persist after restart" },
-  { id: "idleToolbar", label: "Toolbar hides after idle when enabled" }
+  { id: "transparent", label: "Transparent background visible", cn: "透明背景可见" },
+  { id: "alwaysOnTop", label: "Window stays always on top", cn: "窗口保持置顶" },
+  { id: "taskbar", label: "Taskbar entry exists", cn: "任务栏条目存在" },
+  { id: "tray", label: "Tray show/hide works", cn: "托盘显示/隐藏可用" },
+  { id: "clickThrough", label: "Click-through passes mouse events", cn: "鼠标穿透生效" },
+  { id: "lockPosition", label: "Lock-position prevents resize/move changes", cn: "锁定位置可阻止移动/缩放" },
+  { id: "persistence", label: "Position and size persist after restart", cn: "重启后位置与尺寸保持" },
+  { id: "idleToolbar", label: "Toolbar hides after idle when enabled", cn: "启用后工具栏闲置自动隐藏" }
 ] as const;
 
 export type ButtonCoverage = Record<keyof ControllerButtons, boolean>;
