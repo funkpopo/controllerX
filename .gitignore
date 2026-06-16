@@ -9,6 +9,15 @@ build/
 src-tauri/target/
 src-tauri/gen/
 
+# Tauri build output
+src-tauri/target/release/bundle/
+
+# Tauri generated icons (keep only AppIcon source files and final outputs)
+src-tauri/icons/Square*.png
+src-tauri/icons/StoreLogo.png
+src-tauri/icons/android/
+src-tauri/icons/ios/
+
 # Environment
 .env
 .env.local
@@ -25,9 +34,18 @@ src-tauri/gen/
 .DS_Store
 Thumbs.db
 
+# Windows icon cache
+clear-icon-cache.bat
+
 # Logs
 *.log
 .devserver/
+
+# Temporary files
+*.tmp
+*.bak
+build.log
+clear-icon-cache.bat
 
 # Verification reports
 verification-reports/
