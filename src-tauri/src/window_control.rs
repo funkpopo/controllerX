@@ -372,6 +372,10 @@ fn apply_window_size_and_keep_visible(
         .map(|work_area| clamp_logical_size_to_work_area(width, height, work_area, scale_factor))
         .unwrap_or((width, height));
 
+    // Capture the current position and size BEFORE resizing to maintain bottom alignment
+    let old_position = window.outer_position().ok();
+    let old_size = window.outer_size().ok();
+
     window
         .set_size(Size::Logical(LogicalSize::new(
             logical_width as f64,
@@ -400,7 +404,21 @@ fn apply_window_size_and_keep_visible(
             (logical_height as f64 * scale_factor).round() as u32,
         )
     });
-    let clamped_position = clamp_position_to_work_area(current_position, physical_size, work_area);
+
+    // Calculate position adjustment to maintain bottom alignment when height changes
+    let mut adjusted_position = current_position;
+    if let (Some(old_pos), Some(old_sz)) = (old_position, old_size) {
+        let height_delta = physical_size.height as i32 - old_sz.height as i32;
+        if height_delta != 0 {
+            // Move the window up/down by the height difference to keep the bottom edge in place
+            adjusted_position = PhysicalPosition::new(
+                old_pos.x,
+                old_pos.y - height_delta,
+            );
+        }
+    }
+
+    let clamped_position = clamp_position_to_work_area(adjusted_position, physical_size, work_area);
 
     if clamped_position != current_position {
         window
