@@ -16,7 +16,7 @@ const SCREEN_EDGE_MARGIN: i32 = 8;
 const MIN_WINDOW_WIDTH: u32 = 420;
 const MIN_WINDOW_HEIGHT: u32 = 260;
 const CONTROLLER_WINDOW_SIZE: (u32, u32) = (720, 438);
-const KEYBOARD_MOUSE_WINDOW_SIZE: (u32, u32) = (720, 320);
+const KEYBOARD_MOUSE_WINDOW_SIZE: (u32, u32) = (720, 280);
 
 #[derive(Clone, Copy, Debug)]
 pub enum OverlayWindowSize {

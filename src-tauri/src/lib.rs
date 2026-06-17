@@ -19,9 +19,6 @@ const MENU_SHOW_HIDE: &str = "show_hide";
 const MENU_CLICK_THROUGH: &str = "click_through";
 const MENU_LOCK_POSITION: &str = "lock_position";
 const MENU_OBS_MODE: &str = "obs_mode";
-const MENU_SIZE_COMPACT: &str = "size_compact";
-const MENU_SIZE_STANDARD: &str = "size_standard";
-const MENU_SIZE_LARGE: &str = "size_large";
 const MENU_QUIT: &str = "quit";
 
 type SettingsState = Arc<Mutex<AppSettings>>;
@@ -36,7 +33,6 @@ pub fn run() {
             set_click_through,
             set_lock_position,
             set_obs_mode,
-            set_overlay_size,
             set_display_device_window_size,
             save_hardware_verification_report
         ])
@@ -118,22 +114,6 @@ fn set_obs_mode(
 }
 
 #[tauri::command]
-fn set_overlay_size(
-    app: tauri::AppHandle,
-    settings: State<'_, SettingsState>,
-    size: &str,
-) -> Result<AppSettings, String> {
-    let size = match size {
-        "compact" => window_control::OverlayWindowSize::Compact,
-        "standard" => window_control::OverlayWindowSize::Standard,
-        "large" => window_control::OverlayWindowSize::Large,
-        _ => return Err(format!("Unsupported overlay size '{size}'.")),
-    };
-
-    window_control::set_named_size(&app, &settings, size)
-}
-
-#[tauri::command]
 fn set_display_device_window_size(
     app: tauri::AppHandle,
     settings: State<'_, SettingsState>,
@@ -196,16 +176,6 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
         initial_settings.overlay.obs_mode,
         None::<&str>,
     )?;
-    let size_compact =
-        MenuItem::with_id(app, MENU_SIZE_COMPACT, "窗口尺寸: 紧凑", true, None::<&str>)?;
-    let size_standard = MenuItem::with_id(
-        app,
-        MENU_SIZE_STANDARD,
-        "窗口尺寸: 标准",
-        true,
-        None::<&str>,
-    )?;
-    let size_large = MenuItem::with_id(app, MENU_SIZE_LARGE, "窗口尺寸: 大", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, MENU_QUIT, "退出 controllerX", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
@@ -214,9 +184,6 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
             &click_through,
             &lock_position,
             &obs_mode,
-            &size_compact,
-            &size_standard,
-            &size_large,
             &quit,
         ],
     )?;
@@ -264,39 +231,6 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
                 ),
                 Err(error) => emit_command_error(app, error),
             },
-            MENU_SIZE_COMPACT => {
-                emit_if_error(
-                    app,
-                    window_control::set_named_size(
-                        app,
-                        &settings_state,
-                        window_control::OverlayWindowSize::Compact,
-                    )
-                    .map(|_| ()),
-                );
-            }
-            MENU_SIZE_STANDARD => {
-                emit_if_error(
-                    app,
-                    window_control::set_named_size(
-                        app,
-                        &settings_state,
-                        window_control::OverlayWindowSize::Standard,
-                    )
-                    .map(|_| ()),
-                );
-            }
-            MENU_SIZE_LARGE => {
-                emit_if_error(
-                    app,
-                    window_control::set_named_size(
-                        app,
-                        &settings_state,
-                        window_control::OverlayWindowSize::Large,
-                    )
-                    .map(|_| ()),
-                );
-            }
             MENU_QUIT => {
                 // Flush any window move/resize still waiting in the debounced
                 // saver before the process exits.

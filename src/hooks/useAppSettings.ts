@@ -82,16 +82,6 @@ export function useAppSettings() {
     );
   }, []);
 
-  const setOverlaySize = useCallback(
-    async (size: "compact" | "standard" | "large") => {
-      const settings = await invoke<AppSettings>("set_overlay_size", { size });
-      setState((current) =>
-        current.kind === "ready" ? { ...current, settings } : current
-      );
-    },
-    []
-  );
-
   const setDisplayDeviceWindowSize = useCallback(
     async (displayDevice: DisplayDevice) => {
       const settings = await invoke<AppSettings>("set_display_device_window_size", {
@@ -110,7 +100,6 @@ export function useAppSettings() {
     updateSettings,
     setClickThrough,
     setLockPosition,
-    setOverlaySize,
     setDisplayDeviceWindowSize
   };
 }

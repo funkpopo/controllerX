@@ -26,14 +26,6 @@ const OPACITY: Range = { min: 0.25, max: 1, step: 0.01, coarse: 0.05, default: 0
 
 const NUMBER_COMMIT_DEBOUNCE_MS = 500;
 
-type OverlaySizeName = "compact" | "standard" | "large";
-
-const SIZE_OPTIONS: { name: OverlaySizeName; label: string; width: number }[] = [
-  { name: "compact", label: "紧凑", width: 520 },
-  { name: "standard", label: "标准", width: 720 },
-  { name: "large", label: "大", width: 980 }
-];
-
 const SCENARIO_OPTIONS: { value: SimulationScenario; label: string }[] = [
   { value: "sweep", label: "扫掠" },
   { value: "buttons", label: "按键" },
@@ -47,7 +39,6 @@ type SettingsPopoverProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUpdate: (edit: (settings: AppSettings) => AppSettings) => void;
-  onSetSize: (size: OverlaySizeName) => void;
 };
 
 export function SettingsPopover({
@@ -55,8 +46,7 @@ export function SettingsPopover({
   profiles,
   open,
   onOpenChange,
-  onUpdate,
-  onSetSize
+  onUpdate
 }: SettingsPopoverProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
 
@@ -112,25 +102,6 @@ export function SettingsPopover({
             range={OPACITY}
             onChange={setOpacity}
           />
-
-          <section className="adjust-section">
-            <h3>窗口尺寸</h3>
-            <div className="adjust-size-buttons">
-              {SIZE_OPTIONS.map((option) => (
-                <button
-                  key={option.name}
-                  type="button"
-                  className={`adjust-size-button ${
-                    settings.overlay.window.width === option.width ? "active" : ""
-                  }`}
-                  title={`${option.label}(宽 ${option.width}px)`}
-                  onClick={() => onSetSize(option.name)}
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>
-          </section>
 
           <section className="adjust-section">
             <h3>输入</h3>
@@ -236,24 +207,6 @@ export function SettingsPopover({
                 }
               />
             </div>
-          </section>
-
-          <section className="adjust-section">
-            <h3>工具栏</h3>
-            <NumberField
-              label="闲置隐藏延时 (毫秒)"
-              hint="开启“闲置隐藏工具条”后,鼠标停止移动多久隐藏(600–8000)"
-              min={600}
-              max={8000}
-              step={100}
-              value={settings.overlay.toolbarIdleMs}
-              onCommit={(value) =>
-                onUpdate((next) => {
-                  next.overlay.toolbarIdleMs = Math.round(value);
-                  return next;
-                })
-              }
-            />
           </section>
 
           <section className="adjust-section">

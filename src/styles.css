@@ -244,7 +244,7 @@ textarea {
 
 .adjust-popover {
   position: fixed;
-  top: auto;
+  top: 48px;
   bottom: auto;
   left: auto;
   right: 10px;
@@ -261,7 +261,6 @@ textarea {
   backdrop-filter: blur(18px);
   box-shadow: 0 16px 34px rgba(0, 0, 0, 0.42);
   overflow-y: auto;
-  margin-top: 50px;
 }
 
 .adjust-field {
@@ -646,14 +645,14 @@ textarea {
   min-height: 200px;
   display: grid;
   place-items: center;
-  padding: clamp(4px, 1.5vw, 10px);
+  padding: clamp(2px, 1vw, 6px);
   background: transparent;
   overflow: hidden;
 }
 
 .overlay-shell {
   position: absolute;
-  inset: clamp(4px, 1.5vw, 8px);
+  inset: clamp(2px, 1vw, 4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -794,7 +793,7 @@ textarea {
 .keyboard-panel {
   display: grid;
   gap: 4px;
-  padding: 8px;
+  padding: 6px;
 }
 
 .keyboard-row {
@@ -877,8 +876,8 @@ textarea {
 .mouse-panel {
   width: 126px;
   display: grid;
-  gap: 7px;
-  padding: 8px;
+  gap: 5px;
+  padding: 6px;
 }
 
 .mouse-visual {
@@ -1442,6 +1441,20 @@ textarea {
   inset: 0;
 }
 
+.obs-mode-active .keyboard-panel {
+  background: transparent;
+  border: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+.obs-mode-active .mouse-panel {
+  background: transparent;
+  border: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
 .click-through-badge {
   position: fixed;
   left: 8px;
@@ -1497,7 +1510,7 @@ textarea {
     width: calc(100vw - 16px);
     left: 8px;
     right: 8px;
-    margin-top: 50px;
+    top: 48px;
   }
 
   .overlay-workspace {

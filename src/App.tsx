@@ -2,11 +2,8 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import {
   Bug,
-  EyeOff,
   ListChecks,
   Lock,
-  MousePointer2,
-  PanelTopClose,
   Unlock,
   X
 } from "lucide-react";
@@ -37,11 +34,9 @@ import type {
   ProfileInfo
 } from "./types/controller";
 
-type OverlaySizeName = "compact" | "standard" | "large";
 type StatusKind = ControllerSnapshot["status"] | "keyboardMouse";
 
 const ERROR_TOAST_AUTO_DISMISS_MS = 6000;
-const POINTER_ACTIVITY_THROTTLE_MS = 400;
 
 function App() {
   const controller = useControllerState();
@@ -80,7 +75,6 @@ function App() {
       updateSettings={settingsApi.updateSettings}
       setClickThrough={settingsApi.setClickThrough}
       setLockPosition={settingsApi.setLockPosition}
-      setOverlaySize={settingsApi.setOverlaySize}
       setDisplayDeviceWindowSize={settingsApi.setDisplayDeviceWindowSize}
     />
   );
@@ -95,7 +89,6 @@ function ReadyApp({
   updateSettings,
   setClickThrough,
   setLockPosition,
-  setOverlaySize,
   setDisplayDeviceWindowSize
 }: {
   controller: ControllerSnapshot;
@@ -106,16 +99,12 @@ function ReadyApp({
   updateSettings: (edit: (settings: AppSettings) => AppSettings) => Promise<void>;
   setClickThrough: (enabled: boolean) => Promise<void>;
   setLockPosition: (enabled: boolean) => Promise<void>;
-  setOverlaySize: (size: OverlaySizeName) => Promise<void>;
   setDisplayDeviceWindowSize: (displayDevice: DisplayDevice) => Promise<void>;
 }) {
   const [debugVisible, setDebugVisible] = useState(false);
   const [verificationVisible, setVerificationVisible] = useState(false);
-  const [toolbarVisible, setToolbarVisible] = useState(true);
-  const [toolbarActivity, setToolbarActivity] = useState(0);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [commandError, setCommandError] = useState<string | null>(null);
-  const lastPointerActivityRef = useRef(0);
   const lastAppliedWindowDeviceRef = useRef<DisplayDevice | null>(null);
 
   const preset = useMemo(() => {
@@ -131,31 +120,6 @@ function ReadyApp({
       };
     }
   }, [controller, settings.overlay.selectedPresetId]);
-
-  useEffect(() => {
-    if (
-      !settings.overlay.hideToolbarWhenIdle ||
-      settings.overlay.clickThrough ||
-      settingsOpen
-    ) {
-      setToolbarVisible(true);
-      return;
-    }
-
-    setToolbarVisible(true);
-    const timeout = window.setTimeout(
-      () => setToolbarVisible(false),
-      settings.overlay.toolbarIdleMs
-    );
-
-    return () => window.clearTimeout(timeout);
-  }, [
-    toolbarActivity,
-    settingsOpen,
-    settings.overlay.clickThrough,
-    settings.overlay.hideToolbarWhenIdle,
-    settings.overlay.toolbarIdleMs
-  ]);
 
   const displayDevice = useMemo(
     () => resolveDisplayDevice(settings, controller),
@@ -241,12 +205,6 @@ function ReadyApp({
     });
   }, [displayDevice, setDisplayDeviceWindowSize]);
 
-  useEffect(() => {
-    if (settings.overlay.clickThrough) {
-      setToolbarVisible(false);
-    }
-  }, [settings.overlay.clickThrough]);
-
   const showControls = !settings.overlay.clickThrough && !settings.overlay.obsMode;
   const showOverlayMessages = !settings.overlay.obsMode;
   const showControllerOverlay = displayDevice === "controller";
@@ -254,19 +212,9 @@ function ReadyApp({
 
   // Stable handlers so the memoized Toolbar does not re-render on every
   // controller snapshot; they only change when the settings they read change.
-  const toggleClickThrough = useCallback(
-    () => runCommand(setClickThrough(!settings.overlay.clickThrough)),
-    [runCommand, setClickThrough, settings.overlay.clickThrough]
-  );
-
   const toggleLockPosition = useCallback(
     () => runCommand(setLockPosition(!settings.overlay.lockPosition)),
     [runCommand, setLockPosition, settings.overlay.lockPosition]
-  );
-
-  const handleSetSize = useCallback(
-    (size: OverlaySizeName) => runCommand(setOverlaySize(size)),
-    [runCommand, setOverlaySize]
   );
 
   const toggleDebug = useCallback(() => setDebugVisible((value) => !value), []);
@@ -278,34 +226,13 @@ function ReadyApp({
   const appClassName = [
     "app",
     showControls ? "" : "click-through-active",
-    settings.overlay.obsMode ? "obs-mode-active" : "",
-    toolbarVisible ? "" : "toolbar-hidden"
+    settings.overlay.obsMode ? "obs-mode-active" : ""
   ]
     .filter(Boolean)
     .join(" ");
 
   return (
-    <main
-      className={appClassName}
-      onPointerMove={() => {
-        if (
-          !settings.overlay.hideToolbarWhenIdle ||
-          settings.overlay.clickThrough ||
-          settings.overlay.obsMode
-        ) {
-          return;
-        }
-
-        const now = performance.now();
-        if (now - lastPointerActivityRef.current < POINTER_ACTIVITY_THROTTLE_MS) {
-          return;
-        }
-
-        lastPointerActivityRef.current = now;
-        setToolbarVisible(true);
-        setToolbarActivity((value) => value + 1);
-      }}
-    >
+    <main className={appClassName}>
       {showControls ? (
         <Toolbar
           status={status}
@@ -316,8 +243,6 @@ function ReadyApp({
           debugVisible={debugVisible}
           verificationVisible={verificationVisible}
           onUpdate={update}
-          onSetSize={handleSetSize}
-          onToggleClickThrough={toggleClickThrough}
           onToggleLockPosition={toggleLockPosition}
           onSettingsOpenChange={setSettingsOpen}
           onToggleDebug={toggleDebug}
@@ -383,12 +308,6 @@ function ReadyApp({
           </button>
         </div>
       ) : null}
-
-      {settings.overlay.clickThrough && !settings.overlay.obsMode ? (
-        <div className="click-through-badge" aria-hidden="true">
-          鼠标穿透中 · 通过托盘菜单恢复
-        </div>
-      ) : null}
     </main>
   );
 }
@@ -402,8 +321,6 @@ type ToolbarProps = {
   debugVisible: boolean;
   verificationVisible: boolean;
   onUpdate: (edit: (settings: AppSettings) => AppSettings) => void;
-  onSetSize: (size: OverlaySizeName) => void;
-  onToggleClickThrough: () => void;
   onToggleLockPosition: () => void;
   onSettingsOpenChange: (open: boolean) => void;
   onToggleDebug: () => void;
@@ -422,8 +339,6 @@ const Toolbar = memo(function Toolbar({
   debugVisible,
   verificationVisible,
   onUpdate,
-  onSetSize,
-  onToggleClickThrough,
   onToggleLockPosition,
   onSettingsOpenChange,
   onToggleDebug,
@@ -479,17 +394,8 @@ const Toolbar = memo(function Toolbar({
         open={settingsOpen}
         onOpenChange={onSettingsOpenChange}
         onUpdate={onUpdate}
-        onSetSize={onSetSize}
       />
 
-      <button
-        className={`icon-button ${settings.overlay.clickThrough ? "active" : ""}`}
-        aria-label="鼠标穿透"
-        title="鼠标穿透(开启后通过托盘菜单恢复)"
-        onClick={onToggleClickThrough}
-      >
-        <MousePointer2 size={16} />
-      </button>
       <button
         className={`icon-button ${settings.overlay.lockPosition ? "active" : ""}`}
         aria-label="锁定位置"
@@ -497,23 +403,6 @@ const Toolbar = memo(function Toolbar({
         onClick={onToggleLockPosition}
       >
         {settings.overlay.lockPosition ? <Lock size={16} /> : <Unlock size={16} />}
-      </button>
-      <button
-        className={`icon-button ${settings.overlay.hideToolbarWhenIdle ? "active" : ""}`}
-        aria-label="闲置隐藏工具条"
-        title="闲置隐藏工具条"
-        onClick={() =>
-          void onUpdate((next) => {
-            next.overlay.hideToolbarWhenIdle = !next.overlay.hideToolbarWhenIdle;
-            return next;
-          })
-        }
-      >
-        {settings.overlay.hideToolbarWhenIdle ? (
-          <EyeOff size={16} />
-        ) : (
-          <PanelTopClose size={16} />
-        )}
       </button>
       <button
         className={`icon-button ${debugVisible ? "active" : ""}`}
