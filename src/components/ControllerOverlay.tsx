@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   DPAD_DIRECTIONS,
   dpadDirectionForElement,
@@ -25,6 +25,8 @@ type ControllerOverlayProps = {
   opacity: number;
   debugVisible: boolean;
 };
+
+type SpriteStyle = CSSProperties & Record<`--${string}`, string>;
 
 export function ControllerOverlay({
   preset,
@@ -240,6 +242,21 @@ function SpriteLayer({
       : `inset(${Math.max(0, 1 - renderState.clipRatio) * 100}% 0 0 0)`);
   const clipStyle = resolvedClipPath === null ? {} : { clipPath: resolvedClipPath };
 
+  const style = {
+    left,
+    top,
+    width,
+    height,
+    opacity: overlayOpacity,
+    backgroundImage: `url("${image}")`,
+    backgroundPosition: `-${sourceX}px -${sourceY}px`,
+    transform: `translate(${renderState.x}px, ${renderState.y}px)`,
+    "--sprite-image": `url("${image}")`,
+    "--sprite-mask-position": `-${sourceX}px -${sourceY}px`,
+    "--sprite-active-strength": `${Math.min(1, Math.max(0, renderState.value))}`,
+    ...clipStyle
+  } satisfies SpriteStyle;
+
   return (
     <div
       className={[
@@ -254,17 +271,7 @@ function SpriteLayer({
         .join(" ")}
       data-active={active ? "true" : "false"}
       data-direction={dataDirection}
-      style={{
-        left,
-        top,
-        width,
-        height,
-        opacity: overlayOpacity,
-        backgroundImage: `url("${image}")`,
-        backgroundPosition: `-${sourceX}px -${sourceY}px`,
-        transform: `translate(${renderState.x}px, ${renderState.y}px)`,
-        ...clipStyle
-      }}
+      style={style}
     />
   );
 }
