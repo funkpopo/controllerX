@@ -160,29 +160,29 @@ textarea {
   flex: 0 0 auto;
   border-radius: 99px;
   background: #f07272;
-  box-shadow: 0 0 12px rgba(240, 114, 114, 0.85);
+  box-shadow: 0 0 8px rgba(240, 114, 114, 0.6);
 }
 
 .status-dot.status-active {
   background: #64d9ab;
-  box-shadow: 0 0 12px rgba(100, 217, 171, 0.85);
+  box-shadow: 0 0 8px rgba(100, 217, 171, 0.6);
 }
 
 /* Simulated input is intentionally distinct from live hardware so users never
    mistake demo data for a real controller. */
 .status-dot.status-simulated {
   background: #8fa6ff;
-  box-shadow: 0 0 12px rgba(143, 166, 255, 0.85);
+  box-shadow: 0 0 8px rgba(143, 166, 255, 0.6);
 }
 
 .status-dot.status-unsupported {
   background: #f2bc69;
-  box-shadow: 0 0 12px rgba(242, 188, 105, 0.85);
+  box-shadow: 0 0 8px rgba(242, 188, 105, 0.6);
 }
 
 .status-dot.status-keyboardMouse {
   background: #7ddedf;
-  box-shadow: 0 0 12px rgba(125, 222, 223, 0.85);
+  box-shadow: 0 0 8px rgba(125, 222, 223, 0.6);
 }
 
 .status-chip {
@@ -695,8 +695,14 @@ textarea {
 
 .overlay-debug-label.active {
   color: #061313;
-  background: rgba(125, 222, 223, 0.92);
+  background: linear-gradient(
+    rgba(125, 222, 223, 0.95),
+    rgba(125, 222, 223, 0.88)
+  );
   border-color: rgba(125, 222, 223, 0.96);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 0 1px rgba(125, 222, 223, 0.15);
 }
 
 .overlay-debug-label span {
@@ -722,11 +728,11 @@ textarea {
 }
 
 .sprite-layer.sprite-active {
-  --sprite-active-fill: rgba(125, 222, 223, 0.74);
+  --sprite-active-fill: rgba(125, 222, 223, 0.65);
   filter:
     hue-rotate(var(--sprite-active-hue, 0deg))
-    brightness(1.18)
-    saturate(var(--sprite-active-saturation, 1.28));
+    brightness(1.12)
+    saturate(var(--sprite-active-saturation, 1.15));
 }
 
 .sprite-layer.sprite-active::after {
@@ -734,8 +740,8 @@ textarea {
   inset: 0;
   content: "";
   background: var(--sprite-active-fill);
-  opacity: calc(0.5 + var(--sprite-active-strength, 1) * 0.34);
-  mix-blend-mode: screen;
+  opacity: calc(0.38 + var(--sprite-active-strength, 1) * 0.22);
+  mix-blend-mode: overlay;
   pointer-events: none;
   -webkit-mask-image: var(--sprite-image);
   mask-image: var(--sprite-image);
@@ -746,25 +752,25 @@ textarea {
 }
 
 .sprite-button-a.sprite-active {
-  --sprite-active-fill: rgba(72, 221, 111, 0.8);
+  --sprite-active-fill: rgba(72, 221, 111, 0.7);
 }
 
 .sprite-button-b.sprite-active {
   --sprite-active-hue: -120deg;
-  --sprite-active-saturation: 1.42;
-  --sprite-active-fill: rgba(255, 77, 77, 0.82);
+  --sprite-active-saturation: 1.25;
+  --sprite-active-fill: rgba(255, 77, 77, 0.72);
 }
 
 .sprite-button-x.sprite-active {
   --sprite-active-hue: 118deg;
-  --sprite-active-saturation: 1.5;
-  --sprite-active-fill: rgba(64, 158, 255, 0.82);
+  --sprite-active-saturation: 1.3;
+  --sprite-active-fill: rgba(64, 158, 255, 0.72);
 }
 
 .sprite-button-y.sprite-active {
   --sprite-active-hue: -62deg;
-  --sprite-active-saturation: 1.36;
-  --sprite-active-fill: rgba(255, 215, 76, 0.82);
+  --sprite-active-saturation: 1.22;
+  --sprite-active-fill: rgba(255, 215, 76, 0.72);
 }
 
 .sprite-type-0 {
@@ -836,11 +842,11 @@ textarea {
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     inset 0 -1px 0 rgba(0, 0, 0, 0.26);
   transition:
-    background 48ms ease,
-    border-color 48ms linear,
-    color 48ms linear,
-    transform 48ms linear,
-    box-shadow 48ms linear;
+    background 68ms ease,
+    border-color 68ms ease,
+    color 68ms ease,
+    transform 68ms ease,
+    box-shadow 68ms ease;
 }
 
 .keyboard-key {
@@ -856,11 +862,15 @@ textarea {
 .mouse-side.active,
 .mouse-wheel.active {
   color: #061313;
-  background: rgba(125, 222, 223, 0.9);
-  border-color: rgba(125, 222, 223, 0.98);
+  background: linear-gradient(
+    rgba(125, 222, 223, 0.92),
+    rgba(125, 222, 223, 0.86)
+  );
+  border-color: rgba(125, 222, 223, 0.96);
   box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    0 0 14px rgba(125, 222, 223, 0.36);
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.12),
+    0 0 0 1px rgba(125, 222, 223, 0.18);
 }
 
 .keyboard-key.active {
@@ -924,8 +934,9 @@ textarea {
   background: rgba(255, 255, 255, 0.06);
   border-bottom: 2px solid rgba(255, 255, 255, 0.28);
   transition:
-    background 48ms linear,
-    box-shadow 48ms linear;
+    background 68ms ease,
+    border-color 68ms ease,
+    box-shadow 68ms ease;
 }
 
 .mouse-left {
@@ -966,8 +977,9 @@ textarea {
   border: 2px solid rgba(255, 255, 255, 0.42);
   border-radius: 6px;
   transition:
-    background 48ms linear,
-    box-shadow 48ms linear;
+    background 68ms ease,
+    border-color 68ms ease,
+    box-shadow 68ms ease;
 }
 
 .mouse-x1 {
