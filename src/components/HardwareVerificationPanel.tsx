@@ -26,6 +26,7 @@ import type {
   ControllerSnapshot,
   ProfileInfo
 } from "../types/controller";
+import type { Translation } from "../i18n";
 
 type HardwareVerificationPanelProps = {
   controller: ControllerSnapshot;
@@ -33,6 +34,7 @@ type HardwareVerificationPanelProps = {
   profiles: ProfileInfo[];
   visible: boolean;
   setCommandError: (error: string | null) => void;
+  labels: Translation;
 };
 
 type SavedHardwareVerificationReport = {
@@ -40,18 +42,19 @@ type SavedHardwareVerificationReport = {
 };
 
 const CONNECTION_OPTIONS = [
-  { value: "usb", label: "USB" },
-  { value: "bluetooth", label: "蓝牙" },
-  { value: "wireless-receiver", label: "无线接收器" },
-  { value: "driver-supported-wireless", label: "驱动无线" }
-];
+  "usb",
+  "bluetooth",
+  "wireless-receiver",
+  "driver-supported-wireless"
+] as const;
 
 export function HardwareVerificationPanel({
   controller,
   deviceEvents,
   profiles,
   visible,
-  setCommandError
+  setCommandError,
+  labels
 }: HardwareVerificationPanelProps) {
   const [sessionStartedAtMs, setSessionStartedAtMs] = useState(() => Date.now());
   const [expectedProfileId, setExpectedProfileId] = useState("dualsense");
@@ -131,7 +134,7 @@ export function HardwareVerificationPanel({
   const connectCaptured = hasRealConnectEvent(sessionDeviceEvents);
   const disconnectCaptured = hasRealDisconnectEvent(sessionDeviceEvents);
   const observedProfileId =
-    observation?.profile?.id ?? controller.profile?.id ?? "未检测到";
+    observation?.profile?.id ?? controller.profile?.id ?? labels.verification.notDetected;
   const profileMatches =
     expectedProfileId.length > 0 && observedProfileId === expectedProfileId;
 
@@ -199,15 +202,15 @@ export function HardwareVerificationPanel({
     <aside className="verification-panel">
       <div className="verification-header">
         <div>
-          <span>硬件验证</span>
+          <span>{labels.verification.title}</span>
           <strong>{observedProfileId}</strong>
         </div>
         <div className="verification-actions">
           <button
             type="button"
             className="icon-button"
-            title="重置验证会话"
-            aria-label="重置验证会话"
+            title={labels.verification.resetSession}
+            aria-label={labels.verification.resetSession}
             onClick={resetSession}
           >
             <RotateCcw size={15} />
@@ -215,8 +218,8 @@ export function HardwareVerificationPanel({
           <button
             type="button"
             className="icon-button"
-            title="保存验证报告"
-            aria-label="保存验证报告"
+            title={labels.verification.saveReport}
+            aria-label={labels.verification.saveReport}
             disabled={saving}
             onClick={() => void saveReport()}
           >
@@ -227,7 +230,7 @@ export function HardwareVerificationPanel({
 
       <div className="verification-config">
         <label>
-          <span>配置</span>
+          <span>{labels.verification.profile}</span>
           <select
             value={expectedProfileId}
             onChange={(event) => setExpectedProfileId(event.target.value)}
@@ -240,67 +243,75 @@ export function HardwareVerificationPanel({
           </select>
         </label>
         <label>
-          <span>连接方式</span>
+          <span>{labels.verification.connection}</span>
           <select value={connection} onChange={(event) => setConnection(event.target.value)}>
             {CONNECTION_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>
-                {option.label}
+              <option key={option} value={option}>
+                {connectionLabel(option, labels)}
               </option>
             ))}
           </select>
         </label>
         <label>
-          <span>测试者</span>
+          <span>{labels.verification.tester}</span>
           <input value={tester} onChange={(event) => setTester(event.target.value)} />
         </label>
       </div>
 
       <div className="verification-summary">
-        <StatusPill active={profileMatches} label="配置匹配" />
-        <StatusPill active={connectCaptured} label="连接" />
-        <StatusPill active={disconnectCaptured} label="断开" />
+        <StatusPill active={profileMatches} label={labels.verification.profileMatches} />
+        <StatusPill active={connectCaptured} label={labels.verification.connected} />
+        <StatusPill active={disconnectCaptured} label={labels.verification.disconnected} />
         <StatusPill
           active={!simulationSeen}
-          label={simulationSeen ? "检测到模拟" : "仅真实硬件"}
+          label={
+            simulationSeen
+              ? labels.verification.simulationSeen
+              : labels.verification.realHardwareOnly
+          }
         />
       </div>
 
       <ProgressLine
-        label="按键"
+        label={labels.verification.buttons}
         value={coverageSummary.buttonCovered}
         total={coverageSummary.buttonTotal}
       />
       <ProgressLine
-        label="摇杆/轴"
+        label={labels.verification.axes}
         value={coverageSummary.axisCovered}
         total={coverageSummary.axisTotal}
       />
-      <ProgressLine label="人工检查" value={manualCovered} total={manualTotal} />
+      <ProgressLine
+        label={labels.verification.manualChecks}
+        value={manualCovered}
+        total={manualTotal}
+      />
 
       <section className="verification-section">
-        <h2>必测按键</h2>
+        <h2>{labels.verification.requiredButtons}</h2>
         <div className="verification-grid">
           {requiredButtons.map((button) => (
             <span key={button.key} className={coverage.buttons[button.key] ? "complete" : ""}>
-              {button.cn}
+              {fieldLabel(button, labels)}
             </span>
           ))}
         </div>
       </section>
 
       <section className="verification-section">
-        <h2>全部按键字段</h2>
+        <h2>{labels.verification.allButtonFields}</h2>
         <div className="verification-grid">
           {BUTTON_INPUTS.map((button) => (
             <span key={button.key} className={coverage.buttons[button.key] ? "complete" : ""}>
-              {button.cn}
+              {fieldLabel(button, labels)}
             </span>
           ))}
         </div>
       </section>
 
       <section className="verification-section">
-        <h2>摇杆/轴</h2>
+        <h2>{labels.verification.axes}</h2>
         <div className="verification-grid">
           {AXIS_REQUIREMENTS.map((requirement) => (
             <span
@@ -309,14 +320,14 @@ export function HardwareVerificationPanel({
                 isAxisRequirementCovered(requirement, coverage.axes) ? "complete" : ""
               }
             >
-              {requirement.cn}
+              {fieldLabel(requirement, labels)}
             </span>
           ))}
         </div>
       </section>
 
       <section className="verification-section">
-        <h2>量程</h2>
+        <h2>{labels.verification.axisRange}</h2>
         <div className="range-table">
           {AXIS_KEYS.map((axis) => {
             const stats = coverage.axes[axis];
@@ -333,20 +344,22 @@ export function HardwareVerificationPanel({
       </section>
 
       <ManualCheckGroup
-        title="视觉"
+        title={labels.verification.visuals}
         checks={VISUAL_CHECKS}
         values={manualChecks}
         onToggle={toggleManualCheck}
+        labels={labels}
       />
       <ManualCheckGroup
-        title="窗口"
+        title={labels.verification.window}
         checks={WINDOW_CHECKS}
         values={manualChecks}
         onToggle={toggleManualCheck}
+        labels={labels}
       />
 
       <label className="verification-notes">
-        <span>备注</span>
+        <span>{labels.verification.notes}</span>
         <textarea value={notes} onChange={(event) => setNotes(event.target.value)} />
       </label>
 
@@ -387,12 +400,14 @@ function ManualCheckGroup({
   title,
   checks,
   values,
-  onToggle
+  onToggle,
+  labels
 }: {
   title: string;
   checks: readonly { id: ManualCheckId; label: string; cn: string }[];
   values: ManualChecks;
   onToggle: (id: ManualCheckId) => void;
+  labels: Translation;
 }) {
   return (
     <section className="verification-section">
@@ -405,10 +420,33 @@ function ManualCheckGroup({
               checked={values[check.id]}
               onChange={() => onToggle(check.id)}
             />
-            <span>{check.cn}</span>
+            <span>{fieldLabel(check, labels)}</span>
           </label>
         ))}
       </div>
     </section>
   );
+}
+
+function connectionLabel(
+  value: (typeof CONNECTION_OPTIONS)[number],
+  labels: Translation
+) {
+  switch (value) {
+    case "usb":
+      return labels.verification.connections.usb;
+    case "bluetooth":
+      return labels.verification.connections.bluetooth;
+    case "wireless-receiver":
+      return labels.verification.connections.wirelessReceiver;
+    case "driver-supported-wireless":
+      return labels.verification.connections.driverSupportedWireless;
+  }
+}
+
+function fieldLabel(
+  field: { label: string; cn: string },
+  labels: Translation
+) {
+  return labels.language === "en" ? field.label : field.cn;
 }

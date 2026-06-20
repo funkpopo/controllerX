@@ -7,7 +7,7 @@ import {
   Unlock,
   X
 } from "lucide-react";
-import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useState } from "react";
 import { ControllerOverlay } from "./components/ControllerOverlay";
 import { DebugPanel } from "./components/DebugPanel";
 import { HardwareVerificationPanel } from "./components/HardwareVerificationPanel";
@@ -18,14 +18,14 @@ import {
   KEYBOARD_MOUSE_PRESET_VALUE,
   applyDeviceSelection,
   deviceSelectValue,
-  resolveDisplayDevice,
-  type DisplayDevice
+  resolveDisplayDevice
 } from "./data/displayDevice";
 import { OVERLAY_PRESETS, selectPreset } from "./data/presets";
 import { useAppSettings } from "./hooks/useAppSettings";
 import { useControllerEvents } from "./hooks/useControllerEvents";
 import { useControllerState } from "./hooks/useControllerState";
 import { useKeyboardMouseState } from "./hooks/useKeyboardMouseState";
+import { statusText, t, type Translation } from "./i18n";
 import type {
   AppSettings,
   ControllerDeviceEvent,
@@ -43,11 +43,16 @@ function App() {
   const keyboardMouse = useKeyboardMouseState();
   const deviceEvents = useControllerEvents();
   const settingsApi = useAppSettings();
+  const fallbackLabels = t("zhCn");
 
   if (settingsApi.state.kind === "loading") {
     return (
       <main className="app">
-        <StatePanel controller={controller} message="正在加载设置" />
+        <StatePanel
+          controller={controller}
+          labels={fallbackLabels}
+          message={fallbackLabels.app.loadingSettings}
+        />
       </main>
     );
   }
@@ -57,7 +62,8 @@ function App() {
       <main className="app">
         <StatePanel
           controller={controller}
-          message={`设置加载失败:${settingsApi.state.error}`}
+          labels={fallbackLabels}
+          message={fallbackLabels.app.settingsLoadFailed(settingsApi.state.error)}
         />
       </main>
     );
@@ -73,9 +79,7 @@ function App() {
       settings={settings}
       profiles={profiles}
       updateSettings={settingsApi.updateSettings}
-      setClickThrough={settingsApi.setClickThrough}
       setLockPosition={settingsApi.setLockPosition}
-      setDisplayDeviceWindowSize={settingsApi.setDisplayDeviceWindowSize}
     />
   );
 }
@@ -87,9 +91,7 @@ function ReadyApp({
   settings,
   profiles,
   updateSettings,
-  setClickThrough,
-  setLockPosition,
-  setDisplayDeviceWindowSize
+  setLockPosition
 }: {
   controller: ControllerSnapshot;
   keyboardMouse: KeyboardMouseSnapshot;
@@ -97,15 +99,13 @@ function ReadyApp({
   settings: AppSettings;
   profiles: ProfileInfo[];
   updateSettings: (edit: (settings: AppSettings) => AppSettings) => Promise<void>;
-  setClickThrough: (enabled: boolean) => Promise<void>;
   setLockPosition: (enabled: boolean) => Promise<void>;
-  setDisplayDeviceWindowSize: (displayDevice: DisplayDevice) => Promise<void>;
 }) {
   const [debugVisible, setDebugVisible] = useState(false);
   const [verificationVisible, setVerificationVisible] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [commandError, setCommandError] = useState<string | null>(null);
-  const lastAppliedWindowDeviceRef = useRef<DisplayDevice | null>(null);
+  const labels = useMemo(() => t(settings.language), [settings.language]);
 
   const preset = useMemo(() => {
     try {
@@ -129,7 +129,7 @@ function ReadyApp({
       settings.overlay.showKeyboardMouse
     ]
   );
-  const status = statusText(displayDevice, controller, keyboardMouse);
+  const status = statusText(labels, displayDevice, controller, keyboardMouse);
   const statusKind: StatusKind =
     displayDevice === "keyboardMouse" ? "keyboardMouse" : controller.status;
 
@@ -193,18 +193,6 @@ function ReadyApp({
     []
   );
 
-  useEffect(() => {
-    if (lastAppliedWindowDeviceRef.current === displayDevice) {
-      return;
-    }
-
-    lastAppliedWindowDeviceRef.current = displayDevice;
-    setDisplayDeviceWindowSize(displayDevice).catch((error: unknown) => {
-      lastAppliedWindowDeviceRef.current = null;
-      setCommandError(formatError(error));
-    });
-  }, [displayDevice, setDisplayDeviceWindowSize]);
-
   const showControls = !settings.overlay.clickThrough && !settings.overlay.obsMode;
   const showOverlayMessages = !settings.overlay.obsMode;
   const showControllerOverlay = displayDevice === "controller";
@@ -239,6 +227,7 @@ function ReadyApp({
           statusKind={statusKind}
           settings={settings}
           profiles={profiles}
+          labels={labels}
           settingsOpen={settingsOpen}
           debugVisible={debugVisible}
           verificationVisible={verificationVisible}
@@ -253,7 +242,11 @@ function ReadyApp({
       <section className="overlay-workspace">
         {preset.error && showOverlayMessages ? (
           showControllerOverlay ? (
-            <StatePanel controller={controller} message={`预设不可用:${preset.error}`} />
+            <StatePanel
+              controller={controller}
+              labels={labels}
+              message={labels.app.presetUnavailable(preset.error)}
+            />
           ) : null
         ) : null}
         {preset.value && showControllerOverlay ? (
@@ -262,12 +255,14 @@ function ReadyApp({
             preset={preset.value}
             opacity={settings.overlay.opacity}
             debugVisible={debugVisible}
+            labels={labels}
           />
         ) : null}
         {showKeyboardMouseOverlay ? (
           <KeyboardMouseOverlay
             keyboardMouse={keyboardMouse}
             opacity={settings.overlay.opacity}
+            labels={labels}
           />
         ) : null}
         {!preset.error &&
@@ -275,13 +270,14 @@ function ReadyApp({
         showOverlayMessages &&
         showControllerOverlay &&
         !showKeyboardMouseOverlay ? (
-          <StatePanel controller={controller} />
+          <StatePanel controller={controller} labels={labels} />
         ) : null}
         {debugVisible && showControls ? (
           <DebugPanel
             controller={controller}
             keyboardMouse={keyboardMouse}
             deviceEvents={deviceEvents}
+            labels={labels}
           />
         ) : null}
         {showControls ? (
@@ -291,6 +287,7 @@ function ReadyApp({
             profiles={profiles}
             visible={verificationVisible}
             setCommandError={setCommandError}
+            labels={labels}
           />
         ) : null}
       </section>
@@ -301,7 +298,7 @@ function ReadyApp({
           <button
             type="button"
             className="app-toast-close"
-            aria-label="关闭错误提示"
+            aria-label={labels.app.closeError}
             onClick={() => setCommandError(null)}
           >
             <X size={14} />
@@ -317,6 +314,7 @@ type ToolbarProps = {
   statusKind: StatusKind;
   settings: AppSettings;
   profiles: ProfileInfo[];
+  labels: Translation;
   settingsOpen: boolean;
   debugVisible: boolean;
   verificationVisible: boolean;
@@ -335,6 +333,7 @@ const Toolbar = memo(function Toolbar({
   statusKind,
   settings,
   profiles,
+  labels,
   settingsOpen,
   debugVisible,
   verificationVisible,
@@ -344,7 +343,9 @@ const Toolbar = memo(function Toolbar({
   onToggleDebug,
   onToggleVerification
 }: ToolbarProps) {
-  const toolbarTitle = settings.overlay.lockPosition ? "位置已锁定" : "拖动工具栏移动窗口";
+  const toolbarTitle = settings.overlay.lockPosition
+    ? labels.toolbar.lockedTitle
+    : labels.toolbar.dragTitle;
 
   return (
     <div
@@ -364,7 +365,9 @@ const Toolbar = memo(function Toolbar({
     >
       <div className="device-status" title={status}>
         <span className={`status-dot status-${statusKind}`} />
-        {statusKind === "simulated" ? <span className="status-chip">模拟</span> : null}
+        {statusKind === "simulated" ? (
+          <span className="status-chip">{labels.toolbar.simulatedChip}</span>
+        ) : null}
         <span className="status-text">{status}</span>
       </div>
 
@@ -377,20 +380,23 @@ const Toolbar = memo(function Toolbar({
             return next;
           })
         }
-        title="显示设备"
+        title={labels.toolbar.displayDeviceTitle}
       >
-        <option value="">自动识别设备</option>
+        <option value="">{labels.toolbar.autoDevice}</option>
         {OVERLAY_PRESETS.map((overlayPreset) => (
           <option key={overlayPreset.id} value={overlayPreset.id}>
             {overlayPreset.label}
           </option>
         ))}
-        <option value={KEYBOARD_MOUSE_PRESET_VALUE}>键盘鼠标 64 键</option>
+        <option value={KEYBOARD_MOUSE_PRESET_VALUE}>
+          {labels.toolbar.keyboardMouseDevice}
+        </option>
       </select>
 
       <SettingsPopover
         settings={settings}
         profiles={profiles}
+        labels={labels}
         open={settingsOpen}
         onOpenChange={onSettingsOpenChange}
         onUpdate={onUpdate}
@@ -398,24 +404,24 @@ const Toolbar = memo(function Toolbar({
 
       <button
         className={`icon-button ${settings.overlay.lockPosition ? "active" : ""}`}
-        aria-label="锁定位置"
-        title="锁定位置"
+        aria-label={labels.toolbar.lockPosition}
+        title={labels.toolbar.lockPosition}
         onClick={onToggleLockPosition}
       >
         {settings.overlay.lockPosition ? <Lock size={16} /> : <Unlock size={16} />}
       </button>
       <button
         className={`icon-button ${debugVisible ? "active" : ""}`}
-        aria-label="调试面板"
-        title="调试面板"
+        aria-label={labels.toolbar.debugPanel}
+        title={labels.toolbar.debugPanel}
         onClick={onToggleDebug}
       >
         <Bug size={16} />
       </button>
       <button
         className={`icon-button ${verificationVisible ? "active" : ""}`}
-        aria-label="硬件验证"
-        title="硬件验证"
+        aria-label={labels.toolbar.hardwareVerification}
+        title={labels.toolbar.hardwareVerification}
         onClick={onToggleVerification}
       >
         <ListChecks size={16} />
@@ -423,30 +429,6 @@ const Toolbar = memo(function Toolbar({
     </div>
   );
 });
-
-function statusText(
-  displayDevice: DisplayDevice,
-  controller: ControllerSnapshot,
-  keyboardMouse: KeyboardMouseSnapshot
-) {
-  if (displayDevice === "keyboardMouse") {
-    return keyboardMouse.supported ? "键盘鼠标" : "键鼠采集不可用";
-  }
-
-  if (controller.status === "simulated") {
-    return controller.name ?? "模拟手柄";
-  }
-
-  if (controller.status === "unsupported") {
-    return controller.name ? `不支持:${controller.name}` : "不支持的手柄";
-  }
-
-  if (controller.connected) {
-    return controller.name ?? controller.profile?.displayName ?? "手柄";
-  }
-
-  return "未连接手柄";
-}
 
 function formatError(error: unknown) {
   return error instanceof Error ? error.message : String(error);

@@ -1,5 +1,3 @@
-import type { MouseMovement } from "../types/controller";
-
 export type KeyboardKey = {
   id: string;
   label: string;
@@ -234,10 +232,6 @@ export function keyLabel(code: number) {
   }
 
   return `VK ${code}`;
-}
-
-export function wheelMagnitude(movement: MouseMovement) {
-  return Math.abs(movement.wheelX) + Math.abs(movement.wheelY);
 }
 
 function key(

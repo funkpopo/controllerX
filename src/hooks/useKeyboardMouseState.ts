@@ -13,12 +13,6 @@ export const EMPTY_KEYBOARD_MOUSE_STATE: KeyboardMouseSnapshot = {
     x1: false,
     x2: false
   },
-  movement: {
-    x: 0,
-    y: 0,
-    wheelX: 0,
-    wheelY: 0
-  },
   updatedAtMs: 0
 };
 

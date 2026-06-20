@@ -11,15 +11,6 @@ pub struct MouseButtons {
     pub x2: bool,
 }
 
-#[derive(Clone, Copy, Debug, Default, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct MouseMovement {
-    pub x: i32,
-    pub y: i32,
-    pub wheel_x: i32,
-    pub wheel_y: i32,
-}
-
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct KeyboardMouseSnapshot {
@@ -27,13 +18,12 @@ pub struct KeyboardMouseSnapshot {
     pub error: Option<String>,
     pub pressed_keys: Vec<u32>,
     pub mouse_buttons: MouseButtons,
-    pub movement: MouseMovement,
     pub updated_at_ms: u128,
 }
 
 #[cfg(target_os = "windows")]
 mod platform {
-    use super::{emit_or_log, KeyboardMouseSnapshot, MouseButtons, MouseMovement};
+    use super::{emit_or_log, KeyboardMouseSnapshot, MouseButtons};
     use std::collections::BTreeSet;
     use std::ptr::null_mut;
     use std::sync::mpsc;
@@ -46,12 +36,9 @@ mod platform {
         CallNextHookEx, GetMessageW, SetWindowsHookExW, UnhookWindowsHookEx, HC_ACTION, HHOOK,
         KBDLLHOOKSTRUCT, MSG, MSLLHOOKSTRUCT, WH_KEYBOARD_LL, WH_MOUSE_LL, WM_KEYDOWN, WM_KEYUP,
         WM_LBUTTONDBLCLK, WM_LBUTTONDOWN, WM_LBUTTONUP, WM_MBUTTONDBLCLK, WM_MBUTTONDOWN,
-        WM_MBUTTONUP, WM_MOUSEHWHEEL, WM_MOUSEWHEEL, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN,
-        WM_RBUTTONUP, WM_SYSKEYDOWN, WM_SYSKEYUP, WM_XBUTTONDBLCLK, WM_XBUTTONDOWN, WM_XBUTTONUP,
-        XBUTTON1, XBUTTON2,
+        WM_MBUTTONUP, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
+        WM_XBUTTONDBLCLK, WM_XBUTTONDOWN, WM_XBUTTONUP, XBUTTON1, XBUTTON2,
     };
-
-    const MAX_TRANSIENT_ACCUMULATION: i32 = 999;
 
     static HOOK_STATE: OnceLock<Arc<Mutex<HookSharedState>>> = OnceLock::new();
 
@@ -71,7 +58,6 @@ mod platform {
     struct KeyboardMouseInputState {
         pressed_keys: BTreeSet<u32>,
         mouse_buttons: MouseButtons,
-        movement: MouseMovement,
         updated_at_ms: u128,
     }
 
@@ -196,8 +182,6 @@ mod platform {
                 WM_MBUTTONUP => record_mouse_button(MouseButton::Middle, false),
                 WM_XBUTTONDOWN | WM_XBUTTONDBLCLK => record_x_button(hook.mouseData, true),
                 WM_XBUTTONUP => record_x_button(hook.mouseData, false),
-                WM_MOUSEWHEEL => record_wheel(0, signed_high_word(hook.mouseData) as i32),
-                WM_MOUSEHWHEEL => record_wheel(signed_high_word(hook.mouseData) as i32, 0),
                 _ => None,
             };
             notify(signal);
@@ -262,20 +246,6 @@ mod platform {
         }
     }
 
-    fn record_wheel(x: i32, y: i32) -> Option<InputSignal> {
-        let mut shared = hook_state().lock().ok()?;
-        if x == 0 && y == 0 {
-            return None;
-        }
-
-        shared.input.movement.wheel_x =
-            clamp_transient(shared.input.movement.wheel_x.saturating_add(x));
-        shared.input.movement.wheel_y =
-            clamp_transient(shared.input.movement.wheel_y.saturating_add(y));
-        shared.input.updated_at_ms = shared.started_at.elapsed().as_millis();
-        Some(InputSignal::Immediate)
-    }
-
     fn notify(signal: Option<InputSignal>) {
         let Some(signal) = signal else {
             return;
@@ -290,16 +260,14 @@ mod platform {
 
     fn take_snapshot(shared: &Arc<Mutex<HookSharedState>>) -> KeyboardMouseSnapshot {
         match shared.lock() {
-            Ok(mut shared) => {
+            Ok(shared) => {
                 let snapshot = KeyboardMouseSnapshot {
                     supported: true,
                     error: None,
                     pressed_keys: shared.input.pressed_keys.iter().copied().collect(),
                     mouse_buttons: shared.input.mouse_buttons.clone(),
-                    movement: shared.input.movement,
                     updated_at_ms: shared.input.updated_at_ms,
                 };
-                shared.input.movement = MouseMovement::default();
                 snapshot
             }
             Err(_) => KeyboardMouseSnapshot::unsupported(
@@ -318,14 +286,6 @@ mod platform {
         ((value >> 16) & 0xffff) as u16
     }
 
-    fn signed_high_word(value: u32) -> i16 {
-        high_word(value) as i16
-    }
-
-    fn clamp_transient(value: i32) -> i32 {
-        value.clamp(-MAX_TRANSIENT_ACCUMULATION, MAX_TRANSIENT_ACCUMULATION)
-    }
-
     impl KeyboardMouseSnapshot {
         fn unsupported(error: String) -> Self {
             Self {
@@ -333,42 +293,15 @@ mod platform {
                 error: Some(error),
                 pressed_keys: Vec::new(),
                 mouse_buttons: MouseButtons::default(),
-                movement: MouseMovement::default(),
                 updated_at_ms: 0,
             }
-        }
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-
-        #[test]
-        fn signed_high_word_reads_negative_wheel_delta() {
-            let encoded = (0xff88_u32) << 16;
-
-            assert_eq!(signed_high_word(encoded), -120);
-        }
-
-        #[test]
-        fn transient_values_are_clamped() {
-            assert_eq!(clamp_transient(2_000), MAX_TRANSIENT_ACCUMULATION);
-            assert_eq!(clamp_transient(-2_000), -MAX_TRANSIENT_ACCUMULATION);
-        }
-
-        #[test]
-        fn wheel_delta_constant_matches_windows_notch_size() {
-            assert_eq!(
-                windows_sys::Win32::UI::WindowsAndMessaging::WHEEL_DELTA,
-                120
-            );
         }
     }
 }
 
 #[cfg(not(target_os = "windows"))]
 mod platform {
-    use super::{emit_or_log, KeyboardMouseSnapshot, MouseButtons, MouseMovement};
+    use super::{emit_or_log, KeyboardMouseSnapshot, MouseButtons};
     use std::thread;
     use tauri::AppHandle;
 
@@ -385,7 +318,6 @@ mod platform {
                     ),
                     pressed_keys: Vec::new(),
                     mouse_buttons: MouseButtons::default(),
-                    movement: MouseMovement::default(),
                     updated_at_ms: 0,
                 },
             );

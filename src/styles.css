@@ -724,24 +724,28 @@ textarea {
   transition:
     opacity 48ms linear,
     transform 48ms linear,
-    filter 48ms linear;
+    filter 48ms linear,
+    box-shadow 48ms linear;
 }
 
 .sprite-layer.sprite-active {
-  --sprite-active-fill: rgba(125, 222, 223, 0.65);
+  --sprite-active-fill: rgba(125, 222, 223, 0.88);
   filter:
     hue-rotate(var(--sprite-active-hue, 0deg))
-    brightness(1.12)
-    saturate(var(--sprite-active-saturation, 1.15));
+    brightness(1.45)
+    saturate(var(--sprite-active-saturation, 1.5));
+  box-shadow:
+    inset 0 0 40px 15px var(--sprite-active-fill),
+    0 0 20px 4px var(--sprite-active-fill);
 }
 
-.sprite-layer.sprite-active::after {
+.sprite-layer.sprite-active::before {
   position: absolute;
   inset: 0;
   content: "";
-  background: var(--sprite-active-fill);
-  opacity: calc(0.38 + var(--sprite-active-strength, 1) * 0.22);
-  mix-blend-mode: overlay;
+  background: radial-gradient(ellipse at center, var(--sprite-active-fill) 0%, transparent 100%);
+  opacity: calc(0.6 + var(--sprite-active-strength, 1) * 0.4);
+  mix-blend-mode: screen;
   pointer-events: none;
   -webkit-mask-image: var(--sprite-image);
   mask-image: var(--sprite-image);
@@ -749,28 +753,48 @@ textarea {
   mask-position: var(--sprite-mask-position);
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+}
+
+.sprite-layer.sprite-active::after {
+  position: absolute;
+  inset: 0;
+  content: "";
+  background: var(--sprite-active-fill);
+  opacity: calc(0.5 + var(--sprite-active-strength, 1) * 0.4);
+  mix-blend-mode: hard-light;
+  pointer-events: none;
+  -webkit-mask-image: var(--sprite-image);
+  mask-image: var(--sprite-image);
+  -webkit-mask-position: var(--sprite-mask-position);
+  mask-position: var(--sprite-mask-position);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
 }
 
 .sprite-button-a.sprite-active {
-  --sprite-active-fill: rgba(72, 221, 111, 0.7);
+  --sprite-active-fill: rgba(72, 221, 111, 0.95);
 }
 
 .sprite-button-b.sprite-active {
   --sprite-active-hue: -120deg;
-  --sprite-active-saturation: 1.25;
-  --sprite-active-fill: rgba(255, 77, 77, 0.72);
+  --sprite-active-saturation: 1.48;
+  --sprite-active-fill: rgba(255, 77, 77, 0.95);
 }
 
 .sprite-button-x.sprite-active {
   --sprite-active-hue: 118deg;
-  --sprite-active-saturation: 1.3;
-  --sprite-active-fill: rgba(64, 158, 255, 0.72);
+  --sprite-active-saturation: 1.52;
+  --sprite-active-fill: rgba(64, 158, 255, 0.95);
 }
 
 .sprite-button-y.sprite-active {
   --sprite-active-hue: -62deg;
-  --sprite-active-saturation: 1.22;
-  --sprite-active-fill: rgba(255, 215, 76, 0.72);
+  --sprite-active-saturation: 1.45;
+  --sprite-active-fill: rgba(255, 215, 76, 0.95);
 }
 
 .sprite-type-0 {

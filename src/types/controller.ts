@@ -140,6 +140,8 @@ export type WindowSettings = {
   height: number;
 };
 
+export type AppLanguage = "zhCn" | "en";
+
 export type OverlaySettings = {
   selectedPresetId: string | null;
   opacity: number;
@@ -147,8 +149,6 @@ export type OverlaySettings = {
   showKeyboardMouse: boolean;
   clickThrough: boolean;
   lockPosition: boolean;
-  hideToolbarWhenIdle: boolean;
-  toolbarIdleMs: number;
   obsMode: boolean;
   window: WindowSettings;
 };
@@ -174,6 +174,7 @@ export type SimulationSettings = {
 
 export type AppSettings = {
   schemaVersion: number;
+  language: AppLanguage;
   overlay: OverlaySettings;
   input: InputSettings;
   simulation: SimulationSettings;
@@ -193,18 +194,10 @@ export type MouseButtons = {
   x2: boolean;
 };
 
-export type MouseMovement = {
-  x: number;
-  y: number;
-  wheelX: number;
-  wheelY: number;
-};
-
 export type KeyboardMouseSnapshot = {
   supported: boolean;
   error: string | null;
   pressedKeys: number[];
   mouseButtons: MouseButtons;
-  movement: MouseMovement;
   updatedAtMs: number;
 };

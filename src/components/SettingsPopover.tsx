@@ -11,6 +11,7 @@ import type {
   ProfileInfo,
   SimulationScenario
 } from "../types/controller";
+import type { Translation } from "../i18n";
 
 type Range = {
   min: number;
@@ -26,16 +27,12 @@ const OPACITY: Range = { min: 0.25, max: 1, step: 0.01, coarse: 0.05, default: 0
 
 const NUMBER_COMMIT_DEBOUNCE_MS = 500;
 
-const SCENARIO_OPTIONS: { value: SimulationScenario; label: string }[] = [
-  { value: "sweep", label: "扫掠" },
-  { value: "buttons", label: "按键" },
-  { value: "triggers", label: "扳机" },
-  { value: "hotPlug", label: "热插拔" }
-];
+const SCENARIO_OPTIONS: SimulationScenario[] = ["sweep", "buttons", "triggers", "hotPlug"];
 
 type SettingsPopoverProps = {
   settings: AppSettings;
   profiles: ProfileInfo[];
+  labels: Translation;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onUpdate: (edit: (settings: AppSettings) => AppSettings) => void;
@@ -44,6 +41,7 @@ type SettingsPopoverProps = {
 export function SettingsPopover({
   settings,
   profiles,
+  labels,
   open,
   onOpenChange,
   onUpdate
@@ -85,29 +83,30 @@ export function SettingsPopover({
       <button
         type="button"
         className={`icon-button adjust-trigger ${open ? "active" : ""}`}
-        aria-label="叠加层设置"
+        aria-label={labels.settings.title}
         aria-expanded={open}
-        title="叠加层设置"
+        title={labels.settings.title}
         onClick={() => onOpenChange(!open)}
       >
         <SlidersHorizontal size={16} />
       </button>
 
       {open ? (
-        <div className="adjust-popover" role="dialog" aria-label="叠加层设置">
+        <div className="adjust-popover" role="dialog" aria-label={labels.settings.title}>
           <SliderField
             icon={<Eye size={16} />}
-            label="透明度"
+            label={labels.settings.opacity}
             value={settings.overlay.opacity}
             range={OPACITY}
             onChange={setOpacity}
+            labels={labels}
           />
 
           <section className="adjust-section">
-            <h3>输入</h3>
+            <h3>{labels.settings.input}</h3>
             <NumberField
-              label="左摇杆死区"
-              hint="低于该幅度的左摇杆输入会被忽略(0–0.4)"
+              label={labels.settings.leftStickDeadzone}
+              hint={labels.settings.leftStickDeadzoneHint}
               min={0}
               max={0.4}
               step={0.01}
@@ -120,8 +119,8 @@ export function SettingsPopover({
               }
             />
             <NumberField
-              label="右摇杆死区"
-              hint="低于该幅度的右摇杆输入会被忽略(0–0.4)"
+              label={labels.settings.rightStickDeadzone}
+              hint={labels.settings.rightStickDeadzoneHint}
               min={0}
               max={0.4}
               step={0.01}
@@ -134,8 +133,8 @@ export function SettingsPopover({
               }
             />
             <NumberField
-              label="扳机死区"
-              hint="低于该幅度的扳机输入会被忽略(0–0.4)"
+              label={labels.settings.triggerDeadzone}
+              hint={labels.settings.triggerDeadzoneHint}
               min={0}
               max={0.4}
               step={0.01}
@@ -148,8 +147,8 @@ export function SettingsPopover({
               }
             />
             <NumberField
-              label="摇杆灵敏度"
-              hint="大于 1 更灵敏,小于 1 更平缓(0.25–2.5)"
+              label={labels.settings.stickSensitivity}
+              hint={labels.settings.stickSensitivityHint}
               min={0.25}
               max={2.5}
               step={0.05}
@@ -162,8 +161,8 @@ export function SettingsPopover({
               }
             />
             <NumberField
-              label="扳机灵敏度"
-              hint="大于 1 更灵敏,小于 1 更平缓(0.25–2.5)"
+              label={labels.settings.triggerSensitivity}
+              hint={labels.settings.triggerSensitivityHint}
               min={0.25}
               max={2.5}
               step={0.05}
@@ -177,7 +176,7 @@ export function SettingsPopover({
             />
             <div className="adjust-check-row">
               <CheckField
-                label="反转左摇杆 Y"
+                label={labels.settings.invertLeftY}
                 checked={settings.input.invertLeftY}
                 onChange={(checked) =>
                   onUpdate((next) => {
@@ -187,7 +186,7 @@ export function SettingsPopover({
                 }
               />
               <CheckField
-                label="反转右摇杆 Y"
+                label={labels.settings.invertRightY}
                 checked={settings.input.invertRightY}
                 onChange={(checked) =>
                   onUpdate((next) => {
@@ -197,7 +196,7 @@ export function SettingsPopover({
                 }
               />
               <CheckField
-                label="反转十字键 Y"
+                label={labels.settings.invertDpadY}
                 checked={settings.input.invertDpadY}
                 onChange={(checked) =>
                   onUpdate((next) => {
@@ -210,9 +209,9 @@ export function SettingsPopover({
           </section>
 
           <section className="adjust-section">
-            <h3>模拟</h3>
+            <h3>{labels.settings.simulation}</h3>
             <CheckField
-              label="启用模拟数据(无需手柄即可预览)"
+              label={labels.settings.enableSimulation}
               checked={settings.simulation.enabled}
               onChange={(checked) =>
                 onUpdate((next) => {
@@ -222,7 +221,7 @@ export function SettingsPopover({
               }
             />
             <label className="adjust-row">
-              <span>模拟设备</span>
+              <span>{labels.settings.simulationDevice}</span>
               <select
                 className="adjust-select"
                 value={settings.simulation.profileId}
@@ -241,7 +240,7 @@ export function SettingsPopover({
               </select>
             </label>
             <label className="adjust-row">
-              <span>模拟场景</span>
+              <span>{labels.settings.simulationScenario}</span>
               <select
                 className="adjust-select"
                 value={settings.simulation.scenario}
@@ -253,8 +252,8 @@ export function SettingsPopover({
                 }
               >
                 {SCENARIO_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
+                  <option key={option} value={option}>
+                    {labels.settings.scenarios[option]}
                   </option>
                 ))}
               </select>
@@ -267,7 +266,7 @@ export function SettingsPopover({
             onClick={() => setOpacity(OPACITY.default)}
           >
             <RotateCcw size={14} />
-            <span>重置透明度</span>
+            <span>{labels.settings.resetOpacity}</span>
           </button>
         </div>
       ) : null}
@@ -399,13 +398,15 @@ function SliderField({
   label,
   value,
   range,
-  onChange
+  onChange,
+  labels
 }: {
   icon: ReactNode;
   label: string;
   value: number;
   range: Range;
   onChange: (value: number) => void;
+  labels: Translation;
 }) {
   const percent = Math.round(value * 100);
   const fill = ((value - range.min) / (range.max - range.min)) * 100;
@@ -430,7 +431,7 @@ function SliderField({
         <button
           type="button"
           className="adjust-stepper"
-          aria-label={`减小${label}`}
+          aria-label={labels.settings.decrease(label)}
           disabled={value <= range.min}
           onClick={() => step(-range.coarse)}
           onPointerDown={(e) => e.preventDefault()}
@@ -455,7 +456,7 @@ function SliderField({
         <button
           type="button"
           className="adjust-stepper"
-          aria-label={`增大${label}`}
+          aria-label={labels.settings.increase(label)}
           disabled={value >= range.max}
           onClick={() => step(range.coarse)}
           onPointerDown={(e) => e.preventDefault()}

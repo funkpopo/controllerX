@@ -15,41 +15,6 @@ const WINDOW_SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
 const SCREEN_EDGE_MARGIN: i32 = 8;
 const MIN_WINDOW_WIDTH: u32 = 420;
 const MIN_WINDOW_HEIGHT: u32 = 260;
-const CONTROLLER_WINDOW_SIZE: (u32, u32) = (720, 438);
-const KEYBOARD_MOUSE_WINDOW_SIZE: (u32, u32) = (720, 280);
-
-#[derive(Clone, Copy, Debug)]
-pub enum OverlayWindowSize {
-    Compact,
-    Standard,
-    Large,
-}
-
-impl OverlayWindowSize {
-    pub fn dimensions(self) -> (u32, u32) {
-        match self {
-            OverlayWindowSize::Compact => (520, 320),
-            OverlayWindowSize::Standard => (720, 438),
-            OverlayWindowSize::Large => (980, 596),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub enum DisplayDeviceWindowSize {
-    Controller,
-    KeyboardMouse,
-}
-
-impl DisplayDeviceWindowSize {
-    fn dimensions(self) -> (u32, u32) {
-        match self {
-            DisplayDeviceWindowSize::Controller => CONTROLLER_WINDOW_SIZE,
-            DisplayDeviceWindowSize::KeyboardMouse => KEYBOARD_MOUSE_WINDOW_SIZE,
-        }
-    }
-}
-
 pub fn configure_main_window(
     app: &AppHandle,
     settings_state: Arc<Mutex<AppSettings>>,
@@ -165,52 +130,6 @@ pub fn set_obs_mode(
         settings.overlay.obs_mode = enabled;
     })?;
     apply_window_interaction_state(&window, &updated)?;
-
-    emit_settings_updated(app, &updated);
-
-    Ok(updated)
-}
-
-pub fn set_named_size(
-    app: &AppHandle,
-    settings_state: &Arc<Mutex<AppSettings>>,
-    size: OverlayWindowSize,
-) -> Result<AppSettings, String> {
-    let window = main_window(app)?;
-    let (width, height) = size.dimensions();
-    let applied = apply_window_size_and_keep_visible(&window, width, height)?;
-
-    let updated = update_settings(app, settings_state, |settings| {
-        settings.overlay.window.width = applied.logical_width;
-        settings.overlay.window.height = applied.logical_height;
-        if let Some(position) = applied.position {
-            settings.overlay.window.x = Some(position.x);
-            settings.overlay.window.y = Some(position.y);
-        }
-    })?;
-
-    emit_settings_updated(app, &updated);
-
-    Ok(updated)
-}
-
-pub fn set_display_device_window_size(
-    app: &AppHandle,
-    settings_state: &Arc<Mutex<AppSettings>>,
-    size: DisplayDeviceWindowSize,
-) -> Result<AppSettings, String> {
-    let window = main_window(app)?;
-    let (width, height) = size.dimensions();
-    let applied = apply_window_size_and_keep_visible(&window, width, height)?;
-
-    let updated = update_settings(app, settings_state, |settings| {
-        settings.overlay.window.width = applied.logical_width;
-        settings.overlay.window.height = applied.logical_height;
-        if let Some(position) = applied.position {
-            settings.overlay.window.x = Some(position.x);
-            settings.overlay.window.y = Some(position.y);
-        }
-    })?;
 
     emit_settings_updated(app, &updated);
 
@@ -411,10 +330,7 @@ fn apply_window_size_and_keep_visible(
         let height_delta = physical_size.height as i32 - old_sz.height as i32;
         if height_delta != 0 {
             // Move the window up/down by the height difference to keep the bottom edge in place
-            adjusted_position = PhysicalPosition::new(
-                old_pos.x,
-                old_pos.y - height_delta,
-            );
+            adjusted_position = PhysicalPosition::new(old_pos.x, old_pos.y - height_delta);
         }
     }
 
@@ -613,19 +529,6 @@ mod tests {
 
         assert!(overlay_ignores_cursor_events(&settings));
         assert!(!overlay_resizable(&settings));
-    }
-
-    #[test]
-    fn device_window_sizes_match_display_surface_shapes() {
-        assert_eq!(
-            DisplayDeviceWindowSize::Controller.dimensions(),
-            CONTROLLER_WINDOW_SIZE
-        );
-        assert_eq!(
-            DisplayDeviceWindowSize::KeyboardMouse.dimensions(),
-            KEYBOARD_MOUSE_WINDOW_SIZE
-        );
-        assert!(KEYBOARD_MOUSE_WINDOW_SIZE.1 < CONTROLLER_WINDOW_SIZE.1);
     }
 
     #[test]

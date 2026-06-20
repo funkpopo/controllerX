@@ -4,8 +4,7 @@ import {
   VK,
   isKeyboardKeyActive,
   keyLabel,
-  otherPressedKeyLabels,
-  wheelMagnitude
+  otherPressedKeyLabels
 } from "./keyboardMouse";
 
 function layoutKey(id: string) {
@@ -47,9 +46,5 @@ describe("keyboard/mouse mapping", () => {
 
   it("can label keys outside the fixed keyboard layout for diagnostics", () => {
     expect(otherPressedKeyLabels([VK.w, 0x70, 255])).toEqual(["F1", "VK 255"]);
-  });
-
-  it("computes wheel activity magnitudes without using mouse movement pulses", () => {
-    expect(wheelMagnitude({ x: 0, y: 0, wheelX: -120, wheelY: 120 })).toBe(240);
   });
 });

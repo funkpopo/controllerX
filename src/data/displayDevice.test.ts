@@ -14,6 +14,7 @@ function settings(
 ): AppSettings {
   return {
     schemaVersion: 1,
+    language: "zhCn",
     overlay: {
       selectedPresetId,
       opacity: 0.92,
@@ -21,8 +22,6 @@ function settings(
       showKeyboardMouse,
       clickThrough: false,
       lockPosition: false,
-      hideToolbarWhenIdle: false,
-      toolbarIdleMs: 1800,
       obsMode: false,
       window: {
         x: null,

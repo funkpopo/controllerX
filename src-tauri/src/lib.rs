@@ -9,19 +9,33 @@ mod xinput;
 
 use std::sync::{Arc, Mutex};
 
-use tauri::menu::{CheckMenuItem, Menu, MenuItem};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, Submenu};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{Emitter, Manager, State};
 
-use crate::settings::AppSettings;
+use crate::settings::{AppLanguage, AppSettings};
 
 const MENU_SHOW_HIDE: &str = "show_hide";
 const MENU_CLICK_THROUGH: &str = "click_through";
 const MENU_LOCK_POSITION: &str = "lock_position";
 const MENU_OBS_MODE: &str = "obs_mode";
+const MENU_LANGUAGE_ZH_CN: &str = "language_zh_cn";
+const MENU_LANGUAGE_EN: &str = "language_en";
 const MENU_QUIT: &str = "quit";
 
 type SettingsState = Arc<Mutex<AppSettings>>;
+
+#[derive(Clone)]
+struct TrayMenuItems {
+    show_hide: CheckMenuItem<tauri::Wry>,
+    click_through: CheckMenuItem<tauri::Wry>,
+    lock_position: CheckMenuItem<tauri::Wry>,
+    obs_mode: CheckMenuItem<tauri::Wry>,
+    language: Submenu<tauri::Wry>,
+    language_zh_cn: CheckMenuItem<tauri::Wry>,
+    language_en: CheckMenuItem<tauri::Wry>,
+    quit: MenuItem<tauri::Wry>,
+}
 
 pub fn run() {
     tauri::Builder::default()
@@ -33,7 +47,6 @@ pub fn run() {
             set_click_through,
             set_lock_position,
             set_obs_mode,
-            set_display_device_window_size,
             save_hardware_verification_report
         ])
         .setup(|app| {
@@ -114,23 +127,6 @@ fn set_obs_mode(
 }
 
 #[tauri::command]
-fn set_display_device_window_size(
-    app: tauri::AppHandle,
-    settings: State<'_, SettingsState>,
-    display_device: &str,
-) -> Result<AppSettings, String> {
-    let size = match display_device {
-        "controller" => window_control::DisplayDeviceWindowSize::Controller,
-        "keyboardMouse" | "keyboard_mouse" => {
-            window_control::DisplayDeviceWindowSize::KeyboardMouse
-        }
-        _ => return Err(format!("Unsupported display device '{display_device}'.")),
-    };
-
-    window_control::set_display_device_window_size(&app, &settings, size)
-}
-
-#[tauri::command]
 fn save_hardware_verification_report(
     app: tauri::AppHandle,
     file_name: &str,
@@ -144,18 +140,11 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
         .lock()
         .map(|settings| settings.clone())
         .map_err(|_| tauri::Error::Anyhow(anyhow::anyhow!("Settings lock is poisoned.")))?;
-    let show_hide = CheckMenuItem::with_id(
-        app,
-        MENU_SHOW_HIDE,
-        "显示/隐藏叠加层",
-        true,
-        true,
-        None::<&str>,
-    )?;
+    let show_hide = CheckMenuItem::with_id(app, MENU_SHOW_HIDE, "", true, true, None::<&str>)?;
     let click_through = CheckMenuItem::with_id(
         app,
         MENU_CLICK_THROUGH,
-        "鼠标穿透",
+        "",
         true,
         initial_settings.overlay.click_through,
         None::<&str>,
@@ -163,7 +152,7 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
     let lock_position = CheckMenuItem::with_id(
         app,
         MENU_LOCK_POSITION,
-        "锁定位置",
+        "",
         true,
         initial_settings.overlay.lock_position,
         None::<&str>,
@@ -171,34 +160,65 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
     let obs_mode = CheckMenuItem::with_id(
         app,
         MENU_OBS_MODE,
-        "OBS 模式（仅显示输入）",
+        "",
         true,
         initial_settings.overlay.obs_mode,
         None::<&str>,
     )?;
-    let quit = MenuItem::with_id(app, MENU_QUIT, "退出 controllerX", true, None::<&str>)?;
+    let language_zh_cn = CheckMenuItem::with_id(
+        app,
+        MENU_LANGUAGE_ZH_CN,
+        "",
+        true,
+        initial_settings.language == AppLanguage::ZhCn,
+        None::<&str>,
+    )?;
+    let language_en = CheckMenuItem::with_id(
+        app,
+        MENU_LANGUAGE_EN,
+        "",
+        true,
+        initial_settings.language == AppLanguage::En,
+        None::<&str>,
+    )?;
+    let language = Submenu::with_items(app, "", true, &[&language_zh_cn, &language_en])?;
+    let quit = MenuItem::with_id(app, MENU_QUIT, "", true, None::<&str>)?;
+    let menu_items = TrayMenuItems {
+        show_hide,
+        click_through,
+        lock_position,
+        obs_mode,
+        language,
+        language_zh_cn,
+        language_en,
+        quit,
+    };
+    apply_tray_language(&menu_items, initial_settings.language)?;
+
     let menu = Menu::with_items(
         app,
         &[
-            &show_hide,
-            &click_through,
-            &lock_position,
-            &obs_mode,
-            &quit,
+            &menu_items.show_hide,
+            &menu_items.click_through,
+            &menu_items.lock_position,
+            &menu_items.obs_mode,
+            &menu_items.language,
+            &menu_items.quit,
         ],
     )?;
 
-    let show_hide_for_menu = show_hide.clone();
-    let show_hide_for_tray = show_hide.clone();
+    let menu_items_for_menu = menu_items.clone();
+    let show_hide_for_tray = menu_items.show_hide.clone();
 
     let mut builder = TrayIconBuilder::with_id("controllerx")
         .tooltip("controllerX")
         .menu(&menu)
         .show_menu_on_left_click(false)
         .on_menu_event(move |app, event| match event.id().as_ref() {
-            MENU_SHOW_HIDE => {
-                emit_if_error(app, toggle_overlay_visibility(app, &show_hide_for_menu))
-            }
+            MENU_SHOW_HIDE => emit_if_error(
+                app,
+                toggle_overlay_visibility(app, &menu_items_for_menu.show_hide),
+            ),
             MENU_CLICK_THROUGH => match current_settings(&settings_state) {
                 Ok(settings) => emit_if_error(
                     app,
@@ -231,6 +251,19 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
                 ),
                 Err(error) => emit_command_error(app, error),
             },
+            MENU_LANGUAGE_ZH_CN => emit_if_error(
+                app,
+                set_language(
+                    app,
+                    &settings_state,
+                    AppLanguage::ZhCn,
+                    &menu_items_for_menu,
+                ),
+            ),
+            MENU_LANGUAGE_EN => emit_if_error(
+                app,
+                set_language(app, &settings_state, AppLanguage::En, &menu_items_for_menu),
+            ),
             MENU_QUIT => {
                 // Flush any window move/resize still waiting in the debounced
                 // saver before the process exits.
@@ -272,6 +305,76 @@ fn current_settings(settings_state: &SettingsState) -> Result<AppSettings, Strin
         .lock()
         .map(|settings| settings.clone())
         .map_err(|_| "Settings lock is poisoned.".to_string())
+}
+
+fn set_language(
+    app: &tauri::AppHandle,
+    settings_state: &SettingsState,
+    language: AppLanguage,
+    menu_items: &TrayMenuItems,
+) -> Result<(), String> {
+    let updated = window_control::update_settings(app, settings_state, |settings| {
+        settings.language = language;
+    })?;
+    apply_tray_language(menu_items, updated.language)
+        .map_err(|error| format!("Failed to update tray language menu: {error}"))?;
+    app.emit("settings-updated", updated)
+        .map_err(|error| format!("Failed to emit settings update: {error}"))
+}
+
+struct TrayLabels {
+    show_hide: &'static str,
+    click_through: &'static str,
+    lock_position: &'static str,
+    obs_mode: &'static str,
+    language: &'static str,
+    language_zh_cn: &'static str,
+    language_en: &'static str,
+    quit: &'static str,
+}
+
+fn tray_labels(language: AppLanguage) -> TrayLabels {
+    match language {
+        AppLanguage::ZhCn => TrayLabels {
+            show_hide: "显示/隐藏叠加层",
+            click_through: "鼠标穿透",
+            lock_position: "锁定位置",
+            obs_mode: "OBS 模式（仅显示输入）",
+            language: "语言",
+            language_zh_cn: "中文",
+            language_en: "English",
+            quit: "退出 controllerX",
+        },
+        AppLanguage::En => TrayLabels {
+            show_hide: "Show/Hide Overlay",
+            click_through: "Click-through",
+            lock_position: "Lock Position",
+            obs_mode: "OBS Mode (Input Only)",
+            language: "Language",
+            language_zh_cn: "中文",
+            language_en: "English",
+            quit: "Quit controllerX",
+        },
+    }
+}
+
+fn apply_tray_language(menu_items: &TrayMenuItems, language: AppLanguage) -> tauri::Result<()> {
+    let labels = tray_labels(language);
+    menu_items.show_hide.set_text(labels.show_hide)?;
+    menu_items.click_through.set_text(labels.click_through)?;
+    menu_items.lock_position.set_text(labels.lock_position)?;
+    menu_items.obs_mode.set_text(labels.obs_mode)?;
+    menu_items.language.set_text(labels.language)?;
+    menu_items.language_zh_cn.set_text(labels.language_zh_cn)?;
+    menu_items.language_en.set_text(labels.language_en)?;
+    menu_items.quit.set_text(labels.quit)?;
+    menu_items
+        .language_zh_cn
+        .set_checked(language == AppLanguage::ZhCn)?;
+    menu_items
+        .language_en
+        .set_checked(language == AppLanguage::En)?;
+    Ok(())
 }
 
 fn emit_if_error(app: &tauri::AppHandle, result: Result<(), String>) {

@@ -203,8 +203,7 @@ export const WINDOW_CHECKS = [
   { id: "tray", label: "Tray show/hide works", cn: "托盘显示/隐藏可用" },
   { id: "clickThrough", label: "Click-through passes mouse events", cn: "鼠标穿透生效" },
   { id: "lockPosition", label: "Lock-position prevents resize/move changes", cn: "锁定位置可阻止移动/缩放" },
-  { id: "persistence", label: "Position and size persist after restart", cn: "重启后位置与尺寸保持" },
-  { id: "idleToolbar", label: "Toolbar hides after idle when enabled", cn: "启用后工具栏闲置自动隐藏" }
+  { id: "persistence", label: "Position and size persist after restart", cn: "重启后位置与尺寸保持" }
 ] as const;
 
 export type ButtonCoverage = Record<keyof ControllerButtons, boolean>;

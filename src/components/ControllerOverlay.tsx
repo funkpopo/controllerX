@@ -18,12 +18,14 @@ import type {
   OverlayPreset,
   OverlayPresetFile
 } from "../types/controller";
+import type { Translation } from "../i18n";
 
 type ControllerOverlayProps = {
   preset: OverlayPreset;
   controller: ControllerSnapshot;
   opacity: number;
   debugVisible: boolean;
+  labels: Translation;
 };
 
 type SpriteStyle = CSSProperties & Record<`--${string}`, string>;
@@ -32,7 +34,8 @@ export function ControllerOverlay({
   preset,
   controller,
   opacity,
-  debugVisible
+  debugVisible,
+  labels
 }: ControllerOverlayProps) {
   const [loadedPreset, setLoadedPreset] = useState<LoadedOverlayPreset | null>(
     null
@@ -113,11 +116,11 @@ export function ControllerOverlay({
   }, [controller, loadedPreset]);
 
   if (error) {
-    return <div className="state-panel">预设加载失败:{error}</div>;
+    return <div className="state-panel">{labels.controllerOverlay.presetLoadFailed(error)}</div>;
   }
 
   if (!loadedPreset) {
-    return <div className="state-panel">正在加载预设</div>;
+    return <div className="state-panel">{labels.controllerOverlay.loadingPreset}</div>;
   }
 
   const aspect = loadedPreset.overlayWidth / loadedPreset.overlayHeight;

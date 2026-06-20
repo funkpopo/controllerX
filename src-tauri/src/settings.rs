@@ -10,9 +10,19 @@ const SETTINGS_FILE: &str = "settings.json";
 #[serde(rename_all = "camelCase")]
 pub struct AppSettings {
     pub schema_version: u32,
+    #[serde(default)]
+    pub language: AppLanguage,
     pub overlay: OverlaySettings,
     pub input: InputSettings,
     pub simulation: SimulationSettings,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum AppLanguage {
+    #[default]
+    ZhCn,
+    En,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -26,8 +36,6 @@ pub struct OverlaySettings {
     pub show_keyboard_mouse: bool,
     pub click_through: bool,
     pub lock_position: bool,
-    pub hide_toolbar_when_idle: bool,
-    pub toolbar_idle_ms: u64,
     #[serde(default)]
     pub obs_mode: bool,
     pub window: WindowSettings,
@@ -76,6 +84,7 @@ impl Default for AppSettings {
     fn default() -> Self {
         Self {
             schema_version: 1,
+            language: AppLanguage::ZhCn,
             overlay: OverlaySettings {
                 selected_preset_id: None,
                 opacity: 0.92,
@@ -83,8 +92,6 @@ impl Default for AppSettings {
                 show_keyboard_mouse: true,
                 click_through: false,
                 lock_position: false,
-                hide_toolbar_when_idle: false,
-                toolbar_idle_ms: 1800,
                 obs_mode: false,
                 window: WindowSettings {
                     x: None,
@@ -157,7 +164,6 @@ pub fn sanitize(settings: &mut AppSettings) {
     if !settings.overlay.show_controller && !settings.overlay.show_keyboard_mouse {
         settings.overlay.show_keyboard_mouse = true;
     }
-    settings.overlay.toolbar_idle_ms = settings.overlay.toolbar_idle_ms.clamp(600, 8_000);
     settings.overlay.window.width = settings.overlay.window.width.clamp(420, 2560);
     settings.overlay.window.height = settings.overlay.window.height.clamp(260, 1440);
 

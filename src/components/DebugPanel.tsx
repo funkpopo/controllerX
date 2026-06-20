@@ -4,17 +4,20 @@ import type {
   ControllerSnapshot,
   KeyboardMouseSnapshot
 } from "../types/controller";
+import type { Translation } from "../i18n";
 
 type DebugPanelProps = {
   controller: ControllerSnapshot;
   keyboardMouse: KeyboardMouseSnapshot;
   deviceEvents: ControllerDeviceEvent[];
+  labels: Translation;
 };
 
 export function DebugPanel({
   controller,
   keyboardMouse,
-  deviceEvents
+  deviceEvents,
+  labels
 }: DebugPanelProps) {
   const pressedKeyLabels = keyboardMouse.pressedKeys.map(keyLabel);
 
@@ -22,10 +25,10 @@ export function DebugPanel({
     <aside className="debug-panel">
       <div className="debug-header">
         <span>{controller.status}</span>
-        <span>{controller.profile?.id ?? "无配置"}</span>
+        <span>{controller.profile?.id ?? labels.debug.noProfile}</span>
       </div>
       <ValueGrid
-        title="按键"
+        title={labels.debug.buttons}
         values={{
           south: controller.buttons.south,
           east: controller.buttons.east,
@@ -53,7 +56,7 @@ export function DebugPanel({
         }}
       />
       <ValueGrid
-        title="摇杆/轴"
+        title={labels.debug.axes}
         values={{
           lx: controller.axes.leftStickX,
           ly: controller.axes.leftStickY,
@@ -66,28 +69,24 @@ export function DebugPanel({
         }}
       />
       <ValueGrid
-        title="键鼠"
+        title={labels.debug.keyboardMouse}
         values={{
           ml: keyboardMouse.mouseButtons.left ? 1 : 0,
           mr: keyboardMouse.mouseButtons.right ? 1 : 0,
           mm: keyboardMouse.mouseButtons.middle ? 1 : 0,
           x1: keyboardMouse.mouseButtons.x1 ? 1 : 0,
-          x2: keyboardMouse.mouseButtons.x2 ? 1 : 0,
-          dx: keyboardMouse.movement.x,
-          dy: keyboardMouse.movement.y,
-          wx: keyboardMouse.movement.wheelX,
-          wy: keyboardMouse.movement.wheelY
+          x2: keyboardMouse.mouseButtons.x2 ? 1 : 0
         }}
       />
       <section className="debug-section">
-        <h2>键盘</h2>
+        <h2>{labels.debug.keyboard}</h2>
         <div className="debug-events">
           <p>
             {keyboardMouse.supported
               ? pressedKeyLabels.length > 0
                 ? pressedKeyLabels.join(", ")
-                : "无按键"
-              : keyboardMouse.error ?? "键鼠采集不可用"}
+                : labels.debug.noKeys
+              : keyboardMouse.error ?? labels.keyboardMouse.unavailable}
           </p>
         </div>
       </section>
@@ -111,7 +110,7 @@ export function DebugPanel({
         </div>
       ) : null}
       <section className="debug-section">
-        <h2>设备事件</h2>
+        <h2>{labels.debug.deviceEvents}</h2>
         <div className="debug-events">
           {deviceEvents.length > 0 ? (
             deviceEvents.map((event) => (
@@ -121,7 +120,7 @@ export function DebugPanel({
               </div>
             ))
           ) : (
-            <p>暂无设备事件。</p>
+            <p>{labels.debug.noDeviceEvents}</p>
           )}
         </div>
       </section>

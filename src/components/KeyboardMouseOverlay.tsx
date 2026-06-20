@@ -1,34 +1,31 @@
-import { useMemo, type CSSProperties } from "react";
+import { useMemo } from "react";
 import {
   KEYBOARD_ROWS,
   isKeyboardKeyActive,
-  wheelMagnitude,
   type KeyboardKey
 } from "../data/keyboardMouse";
 import type { KeyboardMouseSnapshot } from "../types/controller";
+import type { Translation } from "../i18n";
 
 type KeyboardMouseOverlayProps = {
   keyboardMouse: KeyboardMouseSnapshot;
   opacity: number;
+  labels: Translation;
 };
 
 export function KeyboardMouseOverlay({
   keyboardMouse,
-  opacity
+  opacity,
+  labels
 }: KeyboardMouseOverlayProps) {
   const pressedKeys = useMemo(
     () => new Set(keyboardMouse.pressedKeys),
     [keyboardMouse.pressedKeys]
   );
-  const wheelActive = wheelMagnitude(keyboardMouse.movement) > 0;
-  const wheelStyle = {
-    "--wheel-x": `${clamp(keyboardMouse.movement.wheelX / 12, -18, 18)}px`,
-    "--wheel-y": `${clamp(-keyboardMouse.movement.wheelY / 12, -18, 18)}px`
-  } as CSSProperties;
 
   return (
     <div className="keyboard-mouse-overlay" style={{ opacity }}>
-      <div className="keyboard-panel" aria-label="键盘输入">
+      <div className="keyboard-panel" aria-label={labels.keyboardMouse.keyboardInput}>
         {KEYBOARD_ROWS.map((row, rowIndex) => (
           <div className="keyboard-row" key={rowIndex}>
             {row.map((keyboardKey) => (
@@ -42,7 +39,7 @@ export function KeyboardMouseOverlay({
         ))}
       </div>
 
-      <div className="mouse-panel" aria-label="鼠标输入">
+      <div className="mouse-panel" aria-label={labels.keyboardMouse.mouseInput}>
         <div className="mouse-visual">
           <div className="mouse-shell">
             <span
@@ -56,9 +53,7 @@ export function KeyboardMouseOverlay({
               }`}
             />
             <span
-              key={`wheel-${keyboardMouse.updatedAtMs}-${keyboardMouse.movement.wheelX}-${keyboardMouse.movement.wheelY}`}
-              className={`mouse-wheel ${wheelActive ? "active" : ""}`}
-              style={wheelStyle}
+              className="mouse-wheel"
             />
             <span
               className={`mouse-side mouse-x1 ${
@@ -74,7 +69,7 @@ export function KeyboardMouseOverlay({
         </div>
         {!keyboardMouse.supported ? (
           <div className="keyboard-mouse-warning">
-            {keyboardMouse.error ?? "键鼠采集不可用"}
+            {keyboardMouse.error ?? labels.keyboardMouse.unavailable}
           </div>
         ) : null}
       </div>
@@ -109,8 +104,4 @@ function KeyboardKeyCell({
       ) : null}
     </span>
   );
-}
-
-function clamp(value: number, min: number, max: number) {
-  return Math.min(max, Math.max(min, value));
 }
