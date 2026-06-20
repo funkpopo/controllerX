@@ -30,6 +30,10 @@ type ControllerOverlayProps = {
 
 type SpriteStyle = CSSProperties & Record<`--${string}`, string>;
 
+const HIGHLIGHT_SAFE_PADDING_MIN_PX = 8;
+const HIGHLIGHT_SAFE_PADDING_MAX_PX = 14;
+const HIGHLIGHT_SAFE_PADDING_RATIO = 0.025;
+
 export function ControllerOverlay({
   preset,
   controller,
@@ -126,25 +130,47 @@ export function ControllerOverlay({
   const aspect = loadedPreset.overlayWidth / loadedPreset.overlayHeight;
   const availableWidth = box.width || loadedPreset.overlayWidth;
   const availableHeight = box.height || loadedPreset.overlayHeight;
+  const maxFittingSafePadding = Math.max(
+    0,
+    Math.min(
+      HIGHLIGHT_SAFE_PADDING_MAX_PX,
+      (availableWidth - 1) / 2,
+      (availableHeight - 1) / 2
+    )
+  );
+  const preferredSafePadding = Math.max(
+    HIGHLIGHT_SAFE_PADDING_MIN_PX,
+    Math.min(availableWidth, availableHeight) * HIGHLIGHT_SAFE_PADDING_RATIO
+  );
+  const highlightSafePadding = Math.min(
+    maxFittingSafePadding,
+    preferredSafePadding
+  );
+  const fitWidth = Math.max(1, availableWidth - highlightSafePadding * 2);
+  const fitHeight = Math.max(1, availableHeight - highlightSafePadding * 2);
   const renderedWidth = Math.max(
     1,
-    Math.min(loadedPreset.overlayWidth, availableWidth, availableHeight * aspect)
+    Math.min(loadedPreset.overlayWidth, fitWidth, fitHeight * aspect)
   );
   const renderedHeight = renderedWidth / aspect;
   const stageScale = renderedWidth / loadedPreset.overlayWidth;
+  const viewportWidth = renderedWidth + highlightSafePadding * 2;
+  const viewportHeight = renderedHeight + highlightSafePadding * 2;
 
   return (
     <div className="overlay-shell" ref={fitRef} style={{ opacity }}>
       <div
         className="overlay-stage-viewport"
         style={{
-          width: `${renderedWidth}px`,
-          height: `${renderedHeight}px`
+          width: `${viewportWidth}px`,
+          height: `${viewportHeight}px`
         }}
       >
         <div
           className="overlay-stage"
           style={{
+            left: `${highlightSafePadding}px`,
+            top: `${highlightSafePadding}px`,
             width: `${loadedPreset.overlayWidth}px`,
             height: `${loadedPreset.overlayHeight}px`,
             transform: `scale(${stageScale})`
@@ -251,11 +277,9 @@ function SpriteLayer({
     width,
     height,
     opacity: overlayOpacity,
-    backgroundImage: `url("${image}")`,
-    backgroundPosition: `-${sourceX}px -${sourceY}px`,
     transform: `translate(${renderState.x}px, ${renderState.y}px)`,
     "--sprite-image": `url("${image}")`,
-    "--sprite-mask-position": `-${sourceX}px -${sourceY}px`,
+    "--sprite-position": `-${sourceX}px -${sourceY}px`,
     "--sprite-active-strength": `${Math.min(1, Math.max(0, renderState.value))}`,
     ...clipStyle
   } satisfies SpriteStyle;
@@ -266,6 +290,7 @@ function SpriteLayer({
         "sprite-layer",
         `sprite-type-${element.type}`,
         elementClassName(element),
+        elementFillClassName(element),
         dpadDirection ? `sprite-dpad-${dpadDirection}` : "",
         className,
         active ? "sprite-active" : ""
@@ -275,7 +300,10 @@ function SpriteLayer({
       data-active={active ? "true" : "false"}
       data-direction={dataDirection}
       style={style}
-    />
+    >
+      <span className="sprite-fill" aria-hidden="true" />
+      <span className="sprite-image" aria-hidden="true" />
+    </div>
   );
 }
 
@@ -319,6 +347,86 @@ function elementClassName(element: OverlayElement) {
   }
 
   return "";
+}
+
+function elementFillClassName(element: OverlayElement) {
+  const id = element.id.toLowerCase();
+  const dpadDirection = dpadDirectionForElement(element);
+
+  if (element.type === 5) {
+    return "sprite-fill-stick";
+  }
+
+  if (element.type === 6) {
+    return "sprite-fill-trigger";
+  }
+
+  if (element.type === 7) {
+    return "sprite-fill-guide";
+  }
+
+  if (element.type === 8 || dpadDirection) {
+    return "sprite-fill-dpad";
+  }
+
+  if (element.type !== 2) {
+    return "";
+  }
+
+  if (
+    element.code === 0 ||
+    element.code === 1 ||
+    element.code === 2 ||
+    element.code === 3 ||
+    ["a", "b", "x", "y", "square", "circle", "triangle"].includes(id) ||
+    id.includes("button ps5")
+  ) {
+    return "sprite-fill-face";
+  }
+
+  if (
+    element.code === 9 ||
+    element.code === 10 ||
+    id.includes("bumper") ||
+    id.includes("l1") ||
+    id.includes("r1")
+  ) {
+    return "sprite-fill-shoulder";
+  }
+
+  if (
+    element.code === 7 ||
+    element.code === 8 ||
+    id.includes("thumb") ||
+    id.includes("analog")
+  ) {
+    return "sprite-fill-stick";
+  }
+
+  if (element.code === 20 || id.includes("touchpad") || id.includes("touch pad")) {
+    return "sprite-fill-touchpad";
+  }
+
+  if (element.code === 5 || id.includes("guide") || id.includes("ps")) {
+    return "sprite-fill-guide";
+  }
+
+  if (
+    element.code === 4 ||
+    element.code === 6 ||
+    element.code === 15 ||
+    id.includes("select") ||
+    id.includes("share") ||
+    id.includes("back") ||
+    id.includes("start") ||
+    id.includes("option") ||
+    id.includes("menu") ||
+    id.includes("mute")
+  ) {
+    return "sprite-fill-menu";
+  }
+
+  return "sprite-fill-button";
 }
 
 function DebugLabel({
