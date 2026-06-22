@@ -807,7 +807,15 @@ textarea {
   z-index: 3;
   content: "";
   background: var(--sprite-active-fill);
-  opacity: 0;
+  /* Full-area highlight: this layer sits above the button texture (z-index 2)
+     and is masked to the button silhouette, so the active colour tints the
+     entire button region — edge and interior — instead of only leaking through
+     the texture's anti-aliased edge. Normal blending (not screen) is essential
+     here: screen blend against a white cap (e.g. DualSense face buttons) stays
+     white, which is why DS controllers only ever showed an edge glow. A solid
+     normal-blend tint at moderate opacity lights up light AND dark caps while
+     keeping the printed glyph visible. */
+  opacity: calc(0.5 + var(--sprite-active-strength, 1) * 0.2);
   pointer-events: none;
   -webkit-mask-image: var(--sprite-image);
   mask-image: var(--sprite-image);
