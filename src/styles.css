@@ -793,14 +793,16 @@ textarea {
     opacity 48ms linear,
     transform 48ms linear,
     filter 48ms linear;
-  -webkit-mask-image: var(--sprite-image);
-  mask-image: var(--sprite-image);
-  -webkit-mask-position: var(--sprite-position);
-  mask-position: var(--sprite-position);
+  /* Prefer the precomputed filled silhouette mask (edge + interior). Fall back
+     to the raw sprite crop while masks are still loading. */
+  -webkit-mask-image: var(--sprite-mask-image, var(--sprite-image));
+  mask-image: var(--sprite-mask-image, var(--sprite-image));
+  -webkit-mask-position: var(--sprite-mask-position, var(--sprite-position));
+  mask-position: var(--sprite-mask-position, var(--sprite-position));
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
-  -webkit-mask-size: auto;
-  mask-size: auto;
+  -webkit-mask-size: var(--sprite-mask-size, auto);
+  mask-size: var(--sprite-mask-size, auto);
 }
 
 .sprite-layer.sprite-active {
@@ -810,7 +812,9 @@ textarea {
 .sprite-layer.sprite-active .sprite-fill {
   background: var(--sprite-active-fill);
   border-radius: 0;
-  opacity: 1;
+  /* Strong under-fill: for hollow outline sprites the texture is transparent
+     inside the ring, so this layer is the primary visible interior highlight. */
+  opacity: calc(0.72 + var(--sprite-active-strength, 1) * 0.22);
   filter: none;
   transform: none;
 }
@@ -851,24 +855,19 @@ textarea {
   z-index: 3;
   content: "";
   background: var(--sprite-active-fill);
-  /* Full-area highlight: this layer sits above the button texture (z-index 2)
-     and is masked to the button silhouette, so the active colour tints the
-     entire button region — edge and interior — instead of only leaking through
-     the texture's anti-aliased edge. Normal blending (not screen) is essential
-     here: screen blend against a white cap (e.g. DualSense face buttons) stays
-     white, which is why DS controllers only ever showed an edge glow. A solid
-     normal-blend tint at moderate opacity lights up light AND dark caps while
-     keeping the printed glyph visible. */
-  opacity: calc(0.5 + var(--sprite-active-strength, 1) * 0.2);
+  /* Full-area highlight: sits above the button texture and is masked to the
+     filled silhouette (edge + interior). Normal blending (not screen) is
+     essential so light DualSense caps still tint instead of staying white. */
+  opacity: calc(0.42 + var(--sprite-active-strength, 1) * 0.22);
   pointer-events: none;
-  -webkit-mask-image: var(--sprite-image);
-  mask-image: var(--sprite-image);
-  -webkit-mask-position: var(--sprite-position);
-  mask-position: var(--sprite-position);
+  -webkit-mask-image: var(--sprite-mask-image, var(--sprite-image));
+  mask-image: var(--sprite-mask-image, var(--sprite-image));
+  -webkit-mask-position: var(--sprite-mask-position, var(--sprite-position));
+  mask-position: var(--sprite-mask-position, var(--sprite-position));
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
-  -webkit-mask-size: auto;
-  mask-size: auto;
+  -webkit-mask-size: var(--sprite-mask-size, auto);
+  mask-size: var(--sprite-mask-size, auto);
 }
 
 .sprite-layer.sprite-active::after {
@@ -877,17 +876,18 @@ textarea {
   z-index: 0;
   content: "";
   background: var(--sprite-active-fill);
-  opacity: calc(0.24 + var(--sprite-active-strength, 1) * 0.18);
-  filter: blur(5px);
+  /* Keep glow tight: large blur made the highlight look larger than the button. */
+  opacity: calc(0.2 + var(--sprite-active-strength, 1) * 0.14);
+  filter: blur(2px);
   pointer-events: none;
-  -webkit-mask-image: var(--sprite-image);
-  mask-image: var(--sprite-image);
-  -webkit-mask-position: var(--sprite-position);
-  mask-position: var(--sprite-position);
+  -webkit-mask-image: var(--sprite-mask-image, var(--sprite-image));
+  mask-image: var(--sprite-mask-image, var(--sprite-image));
+  -webkit-mask-position: var(--sprite-mask-position, var(--sprite-position));
+  mask-position: var(--sprite-mask-position, var(--sprite-position));
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
-  -webkit-mask-size: auto;
-  mask-size: auto;
+  -webkit-mask-size: var(--sprite-mask-size, auto);
+  mask-size: var(--sprite-mask-size, auto);
 }
 
 .sprite-button-a.sprite-active {

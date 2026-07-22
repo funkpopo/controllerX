@@ -18,6 +18,12 @@ import {
   type DpadDirection,
   type ElementRenderState
 } from "../data/overlayMapping";
+import {
+  buildFilledSpriteMasks,
+  spriteMaskKey,
+  type FilledSpriteMask,
+  type FilledSpriteMaskMap
+} from "../data/spriteMasks";
 import type {
   ControllerSnapshot,
   LoadedOverlayPreset,
@@ -51,6 +57,7 @@ export function ControllerOverlay({
   const [loadedPreset, setLoadedPreset] = useState<LoadedOverlayPreset | null>(
     null
   );
+  const [filledMasks, setFilledMasks] = useState<FilledSpriteMaskMap>({});
   const [error, setError] = useState<string | null>(null);
   const fitRef = useRef<HTMLDivElement | null>(null);
   const [box, setBox] = useState({ width: 0, height: 0 });
@@ -59,6 +66,7 @@ export function ControllerOverlay({
     let disposed = false;
 
     setError(null);
+    setFilledMasks({});
     fetch(preset.config)
       .then((response) => {
         if (!response.ok) {
@@ -79,16 +87,32 @@ export function ControllerOverlay({
 
         validateOverlayPresetElements(preset.id, file.elements);
 
-        setLoadedPreset({
+        const nextPreset: LoadedOverlayPreset = {
           ...preset,
           overlayWidth: file.overlay_width ?? body!.mapping[2],
           overlayHeight: file.overlay_height ?? body!.mapping[3],
           elements: [...file.elements].sort(sortOverlayElements)
-        });
+        };
+        setLoadedPreset(nextPreset);
+
+        // Filled silhouette masks make hollow outline sprites light their
+        // interior, not only the anti-aliased edge.
+        void buildFilledSpriteMasks(nextPreset.image, nextPreset.elements)
+          .then((masks) => {
+            if (!disposed) {
+              setFilledMasks(masks);
+            }
+          })
+          .catch(() => {
+            if (!disposed) {
+              setFilledMasks({});
+            }
+          });
       })
       .catch((reason: unknown) => {
         if (!disposed) {
           setLoadedPreset(null);
+          setFilledMasks({});
           setError(String(reason));
         }
       });
@@ -190,6 +214,7 @@ export function ControllerOverlay({
                 image={loadedPreset.image}
                 element={element}
                 controller={controller}
+                filledMask={filledMasks[spriteMaskKey(element)]}
               />
             ) : (
               <SpriteLayer
@@ -197,6 +222,7 @@ export function ControllerOverlay({
                 image={loadedPreset.image}
                 element={element}
                 renderState={renderState}
+                filledMask={filledMasks[spriteMaskKey(element)]}
                 clipPath={sharedDpadDirectionClipPath(element, loadedPreset.elements)}
                 dataDirection={sharedDpadDirection(element, loadedPreset.elements)}
               />
@@ -222,11 +248,13 @@ export function ControllerOverlay({
 const DpadSpriteLayers = memo(function DpadSpriteLayers({
   image,
   element,
-  controller
+  controller,
+  filledMask
 }: {
   image: string;
   element: OverlayElement;
   controller: ControllerSnapshot;
+  filledMask?: FilledSpriteMask;
 }) {
   return (
     <>
@@ -236,6 +264,7 @@ const DpadSpriteLayers = memo(function DpadSpriteLayers({
           image={image}
           element={element}
           renderState={getDpadDirectionRenderState(direction, controller)}
+          filledMask={filledMask}
           className={`sprite-dpad-${direction}`}
           clipPath={dpadDirectionClipPath(direction)}
           dataDirection={direction}
@@ -250,6 +279,7 @@ const SpriteLayer = memo(
     image,
     element,
     renderState,
+    filledMask,
     className,
     clipPath,
     dataDirection
@@ -257,6 +287,7 @@ const SpriteLayer = memo(
     image: string;
     element: OverlayElement;
     renderState: ElementRenderState;
+    filledMask?: FilledSpriteMask;
     className?: string;
     clipPath?: string;
     dataDirection?: string;
@@ -294,6 +325,13 @@ const SpriteLayer = memo(
       "--sprite-image": `url("${image}")`,
       "--sprite-position": `-${sourceX}px -${sourceY}px`,
       "--sprite-active-strength": `${Math.min(1, Math.max(0, renderState.value))}`,
+      ...(filledMask
+        ? {
+            "--sprite-mask-image": `url("${filledMask.dataUrl}")`,
+            "--sprite-mask-position": "0 0",
+            "--sprite-mask-size": "100% 100%"
+          }
+        : {}),
       ...clipStyle
     } satisfies SpriteStyle;
 
@@ -306,7 +344,8 @@ const SpriteLayer = memo(
           elementFillClassName(element),
           dpadDirection ? `sprite-dpad-${dpadDirection}` : "",
           className,
-          active ? "sprite-active" : ""
+          active ? "sprite-active" : "",
+          filledMask ? "sprite-has-filled-mask" : ""
         ]
           .filter(Boolean)
           .join(" ")}
@@ -322,6 +361,7 @@ const SpriteLayer = memo(
   (prev, next) =>
     prev.image === next.image &&
     prev.element === next.element &&
+    prev.filledMask === next.filledMask &&
     prev.className === next.className &&
     prev.clipPath === next.clipPath &&
     prev.dataDirection === next.dataDirection &&

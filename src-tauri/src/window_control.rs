@@ -33,11 +33,9 @@ pub fn configure_main_window(
         .set_decorations(false)
         .map_err(|error| format!("Failed to remove decorations: {error}"))?;
     window
-        .set_always_on_top(true)
-        .map_err(|error| format!("Failed to set always-on-top: {error}"))?;
-    window
         .set_skip_taskbar(false)
         .map_err(|error| format!("Failed to keep taskbar entry: {error}"))?;
+    // Always-on-top follows OBS mode (and is off by default).
     apply_window_interaction_state(&window, &settings)?;
 
     // Position is persisted in physical pixels and restored before the size so
@@ -480,11 +478,20 @@ fn apply_window_interaction_state(
     settings: &AppSettings,
 ) -> Result<(), String> {
     window
+        .set_always_on_top(overlay_always_on_top(settings))
+        .map_err(|error| format!("Failed to apply always-on-top: {error}"))?;
+    window
         .set_resizable(overlay_resizable(settings))
         .map_err(|error| format!("Failed to apply resize lock: {error}"))?;
     window
         .set_ignore_cursor_events(overlay_ignores_cursor_events(settings))
         .map_err(|error| format!("Failed to apply click-through mode: {error}"))
+}
+
+/// OBS / capture mode pins the overlay above other windows so it stays visible
+/// for recording. Normal mode stacks like a regular app window.
+fn overlay_always_on_top(settings: &AppSettings) -> bool {
+    settings.overlay.obs_mode
 }
 
 fn overlay_resizable(settings: &AppSettings) -> bool {
@@ -518,6 +525,7 @@ mod tests {
         settings.overlay.click_through = false;
         settings.overlay.lock_position = false;
 
+        assert!(overlay_always_on_top(&settings));
         assert!(overlay_ignores_cursor_events(&settings));
         assert!(!overlay_resizable(&settings));
     }
@@ -526,12 +534,14 @@ mod tests {
     fn normal_mode_uses_saved_click_and_lock_settings() {
         let mut settings = AppSettings::default();
 
+        assert!(!overlay_always_on_top(&settings));
         assert!(!overlay_ignores_cursor_events(&settings));
         assert!(overlay_resizable(&settings));
 
         settings.overlay.click_through = true;
         settings.overlay.lock_position = true;
 
+        assert!(!overlay_always_on_top(&settings));
         assert!(overlay_ignores_cursor_events(&settings));
         assert!(!overlay_resizable(&settings));
     }

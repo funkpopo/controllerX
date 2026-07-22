@@ -198,7 +198,7 @@ export const VISUAL_CHECKS = [
 
 export const WINDOW_CHECKS = [
   { id: "transparent", label: "Transparent background visible", cn: "透明背景可见" },
-  { id: "alwaysOnTop", label: "Window stays always on top", cn: "窗口保持置顶" },
+  { id: "alwaysOnTop", label: "OBS mode pins window always on top", cn: "OBS 模式会自动置顶窗口" },
   { id: "taskbar", label: "Taskbar entry exists", cn: "任务栏条目存在" },
   { id: "tray", label: "Tray show/hide works", cn: "托盘显示/隐藏可用" },
   { id: "clickThrough", label: "Click-through passes mouse events", cn: "鼠标穿透生效" },
