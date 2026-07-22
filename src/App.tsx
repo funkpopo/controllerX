@@ -15,26 +15,28 @@ import { SettingsPopover } from "./components/SettingsPopover";
 import { StatePanel } from "./components/StatePanel";
 import { KeyboardMouseOverlay } from "./components/KeyboardMouseOverlay";
 import {
+  BOTH_DISPLAY_VALUE,
   KEYBOARD_MOUSE_PRESET_VALUE,
   applyDeviceSelection,
   deviceSelectValue,
   resolveDisplayDevice
 } from "./data/displayDevice";
-import { OVERLAY_PRESETS, selectPreset } from "./data/presets";
+import { OVERLAY_PRESETS, applyPresetSkin, selectPreset } from "./data/presets";
 import { useAppSettings } from "./hooks/useAppSettings";
 import { useControllerEvents } from "./hooks/useControllerEvents";
 import { useControllerState } from "./hooks/useControllerState";
 import { useKeyboardMouseState } from "./hooks/useKeyboardMouseState";
-import { statusText, t, type Translation } from "./i18n";
+import { deviceCopyText, statusText, t, type Translation } from "./i18n";
 import type {
   AppSettings,
   ControllerDeviceEvent,
   ControllerSnapshot,
   KeyboardMouseSnapshot,
+  OverlayPreset,
   ProfileInfo
 } from "./types/controller";
 
-type StatusKind = ControllerSnapshot["status"] | "keyboardMouse";
+type StatusKind = ControllerSnapshot["status"] | "keyboardMouse" | "both";
 
 const ERROR_TOAST_AUTO_DISMISS_MS = 6000;
 
@@ -109,8 +111,9 @@ function ReadyApp({
 
   const preset = useMemo(() => {
     try {
+      const base = selectPreset(controller, settings.overlay.selectedPresetId);
       return {
-        value: selectPreset(controller, settings.overlay.selectedPresetId),
+        value: base ? applyPresetSkin(base, settings.overlay.presetSkin) : null,
         error: null
       };
     } catch (error) {
@@ -119,19 +122,38 @@ function ReadyApp({
         error: formatError(error)
       };
     }
-  }, [controller, settings.overlay.selectedPresetId]);
+  }, [
+    controller.profile?.presetId,
+    settings.overlay.selectedPresetId,
+    settings.overlay.presetSkin
+  ]);
 
   const displayDevice = useMemo(
     () => resolveDisplayDevice(settings, controller),
     [
       controller.connected,
       settings.overlay.showController,
-      settings.overlay.showKeyboardMouse
+      settings.overlay.showKeyboardMouse,
+      settings.overlay.simultaneousDisplay
     ]
   );
   const status = statusText(labels, displayDevice, controller, keyboardMouse);
   const statusKind: StatusKind =
-    displayDevice === "keyboardMouse" ? "keyboardMouse" : controller.status;
+    displayDevice === "keyboardMouse"
+      ? "keyboardMouse"
+      : displayDevice === "both"
+        ? "both"
+        : controller.status;
+  const copyText = useMemo(
+    () => deviceCopyText(controller, keyboardMouse, displayDevice),
+    [
+      controller.name,
+      controller.device,
+      controller.profile?.id,
+      keyboardMouse.supported,
+      displayDevice
+    ]
+  );
 
   useEffect(() => {
     let disposed = false;
@@ -195,8 +217,10 @@ function ReadyApp({
 
   const showControls = !settings.overlay.clickThrough && !settings.overlay.obsMode;
   const showOverlayMessages = !settings.overlay.obsMode;
-  const showControllerOverlay = displayDevice === "controller";
-  const showKeyboardMouseOverlay = displayDevice === "keyboardMouse";
+  const showControllerOverlay =
+    displayDevice === "controller" || displayDevice === "both";
+  const showKeyboardMouseOverlay =
+    displayDevice === "keyboardMouse" || displayDevice === "both";
 
   // Stable handlers so the memoized Toolbar does not re-render on every
   // controller snapshot; they only change when the settings they read change.
@@ -219,12 +243,20 @@ function ReadyApp({
     .filter(Boolean)
     .join(" ");
 
+  const workspaceClassName = [
+    "overlay-workspace",
+    displayDevice === "both" ? "layout-both" : ""
+  ]
+    .filter(Boolean)
+    .join(" ");
+
   return (
     <main className={appClassName}>
       {showControls ? (
         <Toolbar
           status={status}
           statusKind={statusKind}
+          copyText={copyText}
           settings={settings}
           profiles={profiles}
           labels={labels}
@@ -239,44 +271,25 @@ function ReadyApp({
         />
       ) : null}
 
-      <section className="overlay-workspace">
-        {preset.error && showOverlayMessages ? (
-          showControllerOverlay ? (
-            <StatePanel
-              controller={controller}
-              labels={labels}
-              message={labels.app.presetUnavailable(preset.error)}
-            />
-          ) : null
-        ) : null}
-        {preset.value && showControllerOverlay ? (
-          <ControllerOverlay
-            controller={controller}
-            preset={preset.value}
-            opacity={settings.overlay.opacity}
-            debugVisible={debugVisible}
-            labels={labels}
-          />
-        ) : null}
-        {showKeyboardMouseOverlay ? (
-          <KeyboardMouseOverlay
-            keyboardMouse={keyboardMouse}
-            opacity={settings.overlay.opacity}
-            labels={labels}
-          />
-        ) : null}
-        {!preset.error &&
-        !preset.value &&
-        showOverlayMessages &&
-        showControllerOverlay &&
-        !showKeyboardMouseOverlay ? (
-          <StatePanel controller={controller} labels={labels} />
-        ) : null}
+      <section className={workspaceClassName}>
+        <OverlayLayers
+          controller={controller}
+          keyboardMouse={keyboardMouse}
+          preset={preset}
+          opacity={settings.overlay.opacity}
+          debugVisible={debugVisible}
+          labels={labels}
+          showOverlayMessages={showOverlayMessages}
+          showControllerOverlay={showControllerOverlay}
+          showKeyboardMouseOverlay={showKeyboardMouseOverlay}
+          layoutBoth={displayDevice === "both"}
+        />
         {debugVisible && showControls ? (
           <DebugPanel
             controller={controller}
             keyboardMouse={keyboardMouse}
             deviceEvents={deviceEvents}
+            inputSettings={settings.input}
             labels={labels}
           />
         ) : null}
@@ -309,9 +322,77 @@ function ReadyApp({
   );
 }
 
+/** Isolates high-frequency snapshot props so closed debug/verification panels
+ *  do not sit under the same memo boundary as the live overlays. */
+const OverlayLayers = memo(function OverlayLayers({
+  controller,
+  keyboardMouse,
+  preset,
+  opacity,
+  debugVisible,
+  labels,
+  showOverlayMessages,
+  showControllerOverlay,
+  showKeyboardMouseOverlay,
+  layoutBoth
+}: {
+  controller: ControllerSnapshot;
+  keyboardMouse: KeyboardMouseSnapshot;
+  preset: { value: OverlayPreset | null; error: string | null };
+  opacity: number;
+  debugVisible: boolean;
+  labels: Translation;
+  showOverlayMessages: boolean;
+  showControllerOverlay: boolean;
+  showKeyboardMouseOverlay: boolean;
+  layoutBoth: boolean;
+}) {
+  return (
+    <>
+      {preset.error && showOverlayMessages ? (
+        showControllerOverlay ? (
+          <StatePanel
+            controller={controller}
+            labels={labels}
+            message={labels.app.presetUnavailable(preset.error)}
+          />
+        ) : null
+      ) : null}
+      {preset.value && showControllerOverlay ? (
+        <div className={layoutBoth ? "overlay-pane overlay-pane-controller" : undefined}>
+          <ControllerOverlay
+            controller={controller}
+            preset={preset.value}
+            opacity={opacity}
+            debugVisible={debugVisible}
+            labels={labels}
+          />
+        </div>
+      ) : null}
+      {showKeyboardMouseOverlay ? (
+        <div className={layoutBoth ? "overlay-pane overlay-pane-keyboard" : undefined}>
+          <KeyboardMouseOverlay
+            keyboardMouse={keyboardMouse}
+            opacity={opacity}
+            labels={labels}
+          />
+        </div>
+      ) : null}
+      {!preset.error &&
+      !preset.value &&
+      showOverlayMessages &&
+      showControllerOverlay &&
+      !showKeyboardMouseOverlay ? (
+        <StatePanel controller={controller} labels={labels} />
+      ) : null}
+    </>
+  );
+});
+
 type ToolbarProps = {
   status: string;
   statusKind: StatusKind;
+  copyText: string;
   settings: AppSettings;
   profiles: ProfileInfo[];
   labels: Translation;
@@ -331,6 +412,7 @@ type ToolbarProps = {
 const Toolbar = memo(function Toolbar({
   status,
   statusKind,
+  copyText,
   settings,
   profiles,
   labels,
@@ -363,13 +445,22 @@ const Toolbar = memo(function Toolbar({
         void getCurrentWindow().startDragging();
       }}
     >
-      <div className="device-status" title={status}>
+      <button
+        type="button"
+        className="device-status"
+        title={`${status}\n${labels.toolbar.copyStatus}`}
+        onClick={() => {
+          void navigator.clipboard?.writeText(copyText).catch(() => {
+            // Clipboard can fail without focus; status remains visible via title.
+          });
+        }}
+      >
         <span className={`status-dot status-${statusKind}`} />
         {statusKind === "simulated" ? (
           <span className="status-chip">{labels.toolbar.simulatedChip}</span>
         ) : null}
         <span className="status-text">{status}</span>
-      </div>
+      </button>
 
       <select
         className="preset-select"
@@ -383,6 +474,7 @@ const Toolbar = memo(function Toolbar({
         title={labels.toolbar.displayDeviceTitle}
       >
         <option value="">{labels.toolbar.autoDevice}</option>
+        <option value={BOTH_DISPLAY_VALUE}>{labels.toolbar.bothDevices}</option>
         {OVERLAY_PRESETS.map((overlayPreset) => (
           <option key={overlayPreset.id} value={overlayPreset.id}>
             {overlayPreset.label}

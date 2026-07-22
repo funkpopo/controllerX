@@ -129,7 +129,7 @@ export const KEYBOARD_ROWS: KeyboardKey[][] = [
     key("enter", "Enter", VK.enter, { width: 102 })
   ],
   [
-    key("left-shift", "Shift", [VK.shift, VK.leftShift], { width: 104 }),
+    key("left-shift", "L Shift", [VK.shift, VK.leftShift], { width: 104 }),
     key("z", "Z", VK.z),
     key("x", "X", VK.x),
     key("c", "C", VK.c),
@@ -140,19 +140,18 @@ export const KEYBOARD_ROWS: KeyboardKey[][] = [
     key("comma", ",", VK.comma, { topLabel: "<" }),
     key("period", ".", VK.period, { topLabel: ">" }),
     key("slash", "/", VK.slash, { topLabel: "?" }),
-    key("right-shift", "Shift", VK.rightShift, { width: 62 }),
+    key("right-shift", "R Shift", VK.rightShift, { width: 62 }),
     key("up", "↑", VK.up),
     key("delete", "Del", VK.delete)
   ],
   [
-    key("control", "Ctrl", [VK.control, VK.leftControl, VK.rightControl], {
-      width: 64
-    }),
+    // Left/right modifiers use distinct codes so each side can highlight alone.
+    key("left-control", "L Ctrl", [VK.control, VK.leftControl], { width: 64 }),
     key("win", "Win", [VK.leftWindows, VK.rightWindows], { width: 64 }),
-    key("alt", "Alt", [VK.alt, VK.leftAlt], { width: 64 }),
+    key("left-alt", "L Alt", [VK.alt, VK.leftAlt], { width: 64 }),
     key("space", "Space", VK.space, { width: 332 }),
-    key("right-alt", "Alt", VK.rightAlt, { width: 64 }),
-    key("fn", "Fn", [], { width: 48 }),
+    key("right-alt", "R Alt", VK.rightAlt, { width: 64 }),
+    key("right-control", "R Ctrl", VK.rightControl, { width: 48 }),
     key("left", "←", VK.left),
     key("down", "↓", VK.down),
     key("right", "→", VK.right)

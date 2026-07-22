@@ -25,14 +25,17 @@ export const translations = {
       simulatedChip: "模拟",
       displayDeviceTitle: "显示设备",
       autoDevice: "自动识别设备",
+      bothDevices: "同时显示",
       keyboardMouseDevice: "键盘鼠标 64 键",
       lockPosition: "锁定位置",
       debugPanel: "调试面板",
-      hardwareVerification: "硬件验证"
+      hardwareVerification: "硬件验证",
+      copyStatus: "点击复制设备信息"
     },
     status: {
       keyboardMouse: "键盘鼠标",
       keyboardMouseUnavailable: "键鼠采集不可用",
+      bothLayers: "手柄 + 键鼠",
       simulatedController: "模拟手柄",
       unsupportedWithName: (name: string) => `不支持:${name}`,
       unsupportedController: "不支持的手柄",
@@ -41,7 +44,9 @@ export const translations = {
       missingPreset: "该手柄没有可用的视觉预设",
       unavailable: "手柄状态不可用",
       noControllerDetails:
-        "请连接手柄;或打开工具栏的“叠加层设置”,在“模拟”中开启模拟数据预览效果。"
+        "请连接手柄;或打开工具栏的“叠加层设置”,在“模拟”中开启模拟数据预览效果。",
+      dualshock4NoPreset:
+        "DualShock 4 按键映射已接入，但尚未提供专用视觉预设，因此暂不渲染外观。"
     },
     settings: {
       title: "叠加层设置",
@@ -66,7 +71,19 @@ export const translations = {
       enableSimulation: "启用模拟数据(无需手柄即可预览)",
       simulationDevice: "模拟设备",
       simulationScenario: "模拟场景",
+      simulationPresetHint:
+        "模拟会按所选 profile 输出输入;外观仍由工具栏的显示设备/预设决定。",
+      disableSimulation: "关闭模拟",
       resetOpacity: "重置透明度",
+      resetInput: "重置输入设置",
+      presetSkin: "皮肤/配色",
+      skins: {
+        default: "默认",
+        black: "黑色",
+        white: "白色"
+      },
+      trayOnlyNote:
+        "点击穿透、OBS 模式与语言请在系统托盘菜单中修改。",
       scenarios: {
         sweep: "扫掠",
         buttons: "按键",
@@ -91,7 +108,14 @@ export const translations = {
       keyboard: "键盘",
       noKeys: "无按键",
       deviceEvents: "设备事件",
-      noDeviceEvents: "暂无设备事件。"
+      noDeviceEvents: "暂无设备事件。",
+      calibration: "校准状态",
+      presetCalibrated: "预设校准",
+      inputMapCalibrated: "输入映射校准",
+      hardwareVerified: "硬件验证",
+      stickVisualizer: "摇杆可视化",
+      yes: "是",
+      no: "否"
     },
     verification: {
       title: "硬件验证",
@@ -137,14 +161,17 @@ export const translations = {
       simulatedChip: "Sim",
       displayDeviceTitle: "Display device",
       autoDevice: "Auto-detect device",
+      bothDevices: "Show both",
       keyboardMouseDevice: "Keyboard/mouse 64-key",
       lockPosition: "Lock position",
       debugPanel: "Debug panel",
-      hardwareVerification: "Hardware verification"
+      hardwareVerification: "Hardware verification",
+      copyStatus: "Click to copy device info"
     },
     status: {
       keyboardMouse: "Keyboard/mouse",
       keyboardMouseUnavailable: "Keyboard/mouse capture unavailable",
+      bothLayers: "Controller + keyboard/mouse",
       simulatedController: "Simulated controller",
       unsupportedWithName: (name: string) => `Unsupported: ${name}`,
       unsupportedController: "Unsupported controller",
@@ -153,7 +180,9 @@ export const translations = {
       missingPreset: "This controller has no visual preset",
       unavailable: "Controller status unavailable",
       noControllerDetails:
-        "Connect a controller, or open Overlay Settings in the toolbar and enable simulation preview."
+        "Connect a controller, or open Overlay Settings in the toolbar and enable simulation preview.",
+      dualshock4NoPreset:
+        "DualShock 4 input mapping is available, but no dedicated visual preset is shipped yet."
     },
     settings: {
       title: "Overlay settings",
@@ -179,7 +208,19 @@ export const translations = {
       enableSimulation: "Enable simulated data preview without a controller",
       simulationDevice: "Simulation device",
       simulationScenario: "Simulation scenario",
+      simulationPresetHint:
+        "Simulation drives input for the selected profile; appearance still follows the toolbar display device/preset.",
+      disableSimulation: "Disable simulation",
       resetOpacity: "Reset opacity",
+      resetInput: "Reset input settings",
+      presetSkin: "Skin / color",
+      skins: {
+        default: "Default",
+        black: "Black",
+        white: "White"
+      },
+      trayOnlyNote:
+        "Click-through, OBS mode, and language can only be changed from the system tray menu.",
       scenarios: {
         sweep: "Sweep",
         buttons: "Buttons",
@@ -204,7 +245,14 @@ export const translations = {
       keyboard: "Keyboard",
       noKeys: "No keys",
       deviceEvents: "Device events",
-      noDeviceEvents: "No device events."
+      noDeviceEvents: "No device events.",
+      calibration: "Calibration",
+      presetCalibrated: "Preset calibrated",
+      inputMapCalibrated: "Input map calibrated",
+      hardwareVerified: "Hardware verified",
+      stickVisualizer: "Stick visualizer",
+      yes: "Yes",
+      no: "No"
     },
     verification: {
       title: "Hardware verification",
@@ -246,7 +294,7 @@ export function t(language: AppLanguage): Translation {
 
 export function statusText(
   labels: Translation,
-  displayDevice: "controller" | "keyboardMouse",
+  displayDevice: "controller" | "keyboardMouse" | "both",
   controller: ControllerSnapshot,
   keyboardMouse: KeyboardMouseSnapshot
 ) {
@@ -256,6 +304,21 @@ export function statusText(
       : labels.status.keyboardMouseUnavailable;
   }
 
+  if (displayDevice === "both") {
+    const controllerPart = controllerStatusText(labels, controller);
+    const keyboardPart = keyboardMouse.supported
+      ? labels.status.keyboardMouse
+      : labels.status.keyboardMouseUnavailable;
+    return `${controllerPart} · ${keyboardPart}`;
+  }
+
+  return controllerStatusText(labels, controller);
+}
+
+function controllerStatusText(
+  labels: Translation,
+  controller: ControllerSnapshot
+) {
   if (controller.status === "simulated") {
     return controller.name ?? labels.status.simulatedController;
   }
@@ -271,4 +334,44 @@ export function statusText(
   }
 
   return labels.status.noController;
+}
+
+/** Build a clipboard-friendly device summary for the status bar. */
+export function deviceCopyText(
+  controller: ControllerSnapshot,
+  keyboardMouse: KeyboardMouseSnapshot,
+  displayDevice: "controller" | "keyboardMouse" | "both"
+) {
+  const parts: string[] = [];
+
+  if (displayDevice !== "keyboardMouse") {
+    if (controller.name) {
+      parts.push(controller.name);
+    }
+    if (controller.device) {
+      const vid = controller.device.vendorId;
+      const pid = controller.device.productId;
+      if (vid != null || pid != null) {
+        parts.push(
+          `VID:${vid != null ? vid.toString(16).padStart(4, "0") : "----"} PID:${
+            pid != null ? pid.toString(16).padStart(4, "0") : "----"
+          }`
+        );
+      }
+      if (controller.device.xinput) {
+        parts.push(`XInput slot ${controller.device.xinput.slot + 1}`);
+      }
+    }
+    if (controller.profile) {
+      parts.push(`profile:${controller.profile.id}`);
+    }
+  }
+
+  if (displayDevice !== "controller") {
+    parts.push(
+      keyboardMouse.supported ? "keyboard/mouse" : "keyboard/mouse unavailable"
+    );
+  }
+
+  return parts.join(" | ") || "controllerX";
 }

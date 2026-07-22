@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { selectPreset } from "./presets";
+import { applyPresetSkin, selectPreset } from "./presets";
 import type { ControllerSnapshot, ProfileInfo } from "../types/controller";
 
 const emptyButtons = {
@@ -99,5 +99,22 @@ describe("selectPreset", () => {
     expect(() => selectPreset(snapshot(profile("custom", "not-registered")), null)).toThrow(
       "not-registered"
     );
+  });
+
+  it("applies black/white skins when the preset ships those assets", () => {
+    const base = selectPreset(snapshot(profile("dualsense", "dualsense")), null);
+    expect(base).not.toBeNull();
+
+    const black = applyPresetSkin(base!, "black");
+    const white = applyPresetSkin(base!, "white");
+    const fallback = applyPresetSkin(
+      selectPreset(snapshot(profile("xbox-one", "xbox-one-controller")), null)!,
+      "black"
+    );
+
+    expect(black.image).toContain("dualsenseblack");
+    expect(white.image).toContain("dualsensewhite");
+    // Xbox One has no black asset; keep the default image.
+    expect(fallback.image).toContain("xbox-one-controller.png");
   });
 });

@@ -283,7 +283,8 @@ const DUALSHOCK4_NO_PRESET_STATUS: CalibrationStatus = CalibrationStatus {
     preset_calibrated: false,
     input_map_calibrated: true,
     hardware_verified: false,
-    notes: "DualShock 4 的按键映射已接入,但尚未提供专用视觉预设,因此暂不渲染外观。",
+    // Stable code for frontend i18n (status.dualshock4NoPreset).
+    notes: "dualshock4_no_preset",
 };
 
 pub const PROFILE_CATALOG: [ControllerProfile; 7] = [

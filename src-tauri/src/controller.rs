@@ -94,7 +94,7 @@ pub struct ControllerAxes {
     pub dpad_y: f32,
 }
 
-pub fn spawn_controller_poll(app: AppHandle, settings: Arc<Mutex<AppSettings>>) {
+pub fn spawn_controller_poll(app: AppHandle, settings: Arc<Mutex<Arc<AppSettings>>>) {
     thread::spawn(move || {
         let started_at = Instant::now();
         let mut gilrs = match Gilrs::new() {
@@ -116,10 +116,13 @@ pub fn spawn_controller_poll(app: AppHandle, settings: Arc<Mutex<AppSettings>>) 
         let mut pending_emit = false;
         let mut anything_connected = true;
         let mut was_visible = true;
+        let mut last_settings_ptr: Option<*const AppSettings> = None;
         let mut xinput = XInputPoller::new();
         loop {
+            // Arc::clone of AppSettings — cheap swap-friendly snapshot without
+            // deep-copying the settings struct on every 8ms tick.
             let settings_snapshot = match settings.lock() {
-                Ok(guard) => guard.clone(),
+                Ok(guard) => Arc::clone(&guard),
                 Err(_) => {
                     emit_or_log(
                         &app,
@@ -129,6 +132,13 @@ pub fn spawn_controller_poll(app: AppHandle, settings: Arc<Mutex<AppSettings>>) 
                     return;
                 }
             };
+
+            let settings_ptr = Arc::as_ptr(&settings_snapshot);
+            if last_settings_ptr != Some(settings_ptr) {
+                // Any settings swap (input/simulation/etc.) forces a fresh emit.
+                pending_emit = true;
+                last_settings_ptr = Some(settings_ptr);
+            }
 
             // The overlay only consumes snapshots while it is visible. When the
             // user hides it from the tray we keep draining input but stop the
@@ -213,7 +223,7 @@ pub fn spawn_controller_poll(app: AppHandle, settings: Arc<Mutex<AppSettings>>) 
                     last_simulated_connected = None;
                     build_hardware_snapshot(
                         &gilrs,
-                        &settings_snapshot,
+                        settings_snapshot.as_ref(),
                         xinput_poll.as_ref().and_then(|poll| poll.active.as_ref()),
                         last_active_gamepad,
                         elapsed_ms,

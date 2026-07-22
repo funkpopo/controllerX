@@ -19,11 +19,15 @@ const MENU_SHOW_HIDE: &str = "show_hide";
 const MENU_CLICK_THROUGH: &str = "click_through";
 const MENU_LOCK_POSITION: &str = "lock_position";
 const MENU_OBS_MODE: &str = "obs_mode";
+const MENU_OPACITY_25: &str = "opacity_25";
+const MENU_OPACITY_50: &str = "opacity_50";
+const MENU_OPACITY_75: &str = "opacity_75";
+const MENU_OPACITY_100: &str = "opacity_100";
 const MENU_LANGUAGE_ZH_CN: &str = "language_zh_cn";
 const MENU_LANGUAGE_EN: &str = "language_en";
 const MENU_QUIT: &str = "quit";
 
-type SettingsState = Arc<Mutex<AppSettings>>;
+type SettingsState = Arc<Mutex<Arc<AppSettings>>>;
 
 #[derive(Clone)]
 struct TrayMenuItems {
@@ -31,6 +35,7 @@ struct TrayMenuItems {
     click_through: CheckMenuItem<tauri::Wry>,
     lock_position: CheckMenuItem<tauri::Wry>,
     obs_mode: CheckMenuItem<tauri::Wry>,
+    opacity: Submenu<tauri::Wry>,
     language: Submenu<tauri::Wry>,
     language_zh_cn: CheckMenuItem<tauri::Wry>,
     language_en: CheckMenuItem<tauri::Wry>,
@@ -55,7 +60,7 @@ pub fn run() {
             settings::sanitize(&mut loaded_settings);
             settings::save(app.handle(), &loaded_settings)
                 .map_err(|error| tauri::Error::Anyhow(anyhow::anyhow!(error)))?;
-            let settings_state = Arc::new(Mutex::new(loaded_settings));
+            let settings_state = Arc::new(Mutex::new(Arc::new(loaded_settings)));
             app.manage(settings_state.clone());
 
             window_control::configure_main_window(app.handle(), settings_state.clone())
@@ -73,7 +78,7 @@ pub fn run() {
 fn get_settings(settings: State<'_, SettingsState>) -> Result<AppSettings, String> {
     settings
         .lock()
-        .map(|settings| settings.clone())
+        .map(|settings| settings.as_ref().clone())
         .map_err(|_| "Settings lock is poisoned.".to_string())
 }
 
@@ -138,7 +143,7 @@ fn save_hardware_verification_report(
 fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::Result<()> {
     let initial_settings = settings_state
         .lock()
-        .map(|settings| settings.clone())
+        .map(|settings| settings.as_ref().clone())
         .map_err(|_| tauri::Error::Anyhow(anyhow::anyhow!("Settings lock is poisoned.")))?;
     let show_hide = CheckMenuItem::with_id(app, MENU_SHOW_HIDE, "", true, true, None::<&str>)?;
     let click_through = CheckMenuItem::with_id(
@@ -165,6 +170,16 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
         initial_settings.overlay.obs_mode,
         None::<&str>,
     )?;
+    let opacity_25 = MenuItem::with_id(app, MENU_OPACITY_25, "25%", true, None::<&str>)?;
+    let opacity_50 = MenuItem::with_id(app, MENU_OPACITY_50, "50%", true, None::<&str>)?;
+    let opacity_75 = MenuItem::with_id(app, MENU_OPACITY_75, "75%", true, None::<&str>)?;
+    let opacity_100 = MenuItem::with_id(app, MENU_OPACITY_100, "100%", true, None::<&str>)?;
+    let opacity = Submenu::with_items(
+        app,
+        "",
+        true,
+        &[&opacity_25, &opacity_50, &opacity_75, &opacity_100],
+    )?;
     let language_zh_cn = CheckMenuItem::with_id(
         app,
         MENU_LANGUAGE_ZH_CN,
@@ -188,6 +203,7 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
         click_through,
         lock_position,
         obs_mode,
+        opacity,
         language,
         language_zh_cn,
         language_en,
@@ -202,6 +218,7 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
             &menu_items.click_through,
             &menu_items.lock_position,
             &menu_items.obs_mode,
+            &menu_items.opacity,
             &menu_items.language,
             &menu_items.quit,
         ],
@@ -251,6 +268,10 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
                 ),
                 Err(error) => emit_command_error(app, error),
             },
+            MENU_OPACITY_25 => emit_if_error(app, set_opacity(app, &settings_state, 0.25)),
+            MENU_OPACITY_50 => emit_if_error(app, set_opacity(app, &settings_state, 0.5)),
+            MENU_OPACITY_75 => emit_if_error(app, set_opacity(app, &settings_state, 0.75)),
+            MENU_OPACITY_100 => emit_if_error(app, set_opacity(app, &settings_state, 1.0)),
             MENU_LANGUAGE_ZH_CN => emit_if_error(
                 app,
                 set_language(
@@ -303,8 +324,20 @@ fn create_tray(app: &tauri::AppHandle, settings_state: SettingsState) -> tauri::
 fn current_settings(settings_state: &SettingsState) -> Result<AppSettings, String> {
     settings_state
         .lock()
-        .map(|settings| settings.clone())
+        .map(|settings| settings.as_ref().clone())
         .map_err(|_| "Settings lock is poisoned.".to_string())
+}
+
+fn set_opacity(
+    app: &tauri::AppHandle,
+    settings_state: &SettingsState,
+    opacity: f32,
+) -> Result<(), String> {
+    let updated = window_control::update_settings(app, settings_state, |settings| {
+        settings.overlay.opacity = opacity;
+    })?;
+    app.emit("settings-updated", updated)
+        .map_err(|error| format!("Failed to emit settings update: {error}"))
 }
 
 fn set_language(
@@ -327,6 +360,7 @@ struct TrayLabels {
     click_through: &'static str,
     lock_position: &'static str,
     obs_mode: &'static str,
+    opacity: &'static str,
     language: &'static str,
     language_zh_cn: &'static str,
     language_en: &'static str,
@@ -340,6 +374,7 @@ fn tray_labels(language: AppLanguage) -> TrayLabels {
             click_through: "鼠标穿透",
             lock_position: "锁定位置",
             obs_mode: "OBS 模式（仅显示输入）",
+            opacity: "透明度",
             language: "语言",
             language_zh_cn: "中文",
             language_en: "English",
@@ -350,6 +385,7 @@ fn tray_labels(language: AppLanguage) -> TrayLabels {
             click_through: "Click-through",
             lock_position: "Lock Position",
             obs_mode: "OBS Mode (Input Only)",
+            opacity: "Opacity",
             language: "Language",
             language_zh_cn: "中文",
             language_en: "English",
@@ -364,6 +400,7 @@ fn apply_tray_language(menu_items: &TrayMenuItems, language: AppLanguage) -> tau
     menu_items.click_through.set_text(labels.click_through)?;
     menu_items.lock_position.set_text(labels.lock_position)?;
     menu_items.obs_mode.set_text(labels.obs_mode)?;
+    menu_items.opacity.set_text(labels.opacity)?;
     menu_items.language.set_text(labels.language)?;
     menu_items.language_zh_cn.set_text(labels.language_zh_cn)?;
     menu_items.language_en.set_text(labels.language_en)?;

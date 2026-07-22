@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  BOTH_DISPLAY_VALUE,
   KEYBOARD_MOUSE_PRESET_VALUE,
   applyDeviceSelection,
   deviceSelectValue,
@@ -10,7 +11,8 @@ import type { AppSettings, ControllerSnapshot } from "../types/controller";
 function settings(
   showController: boolean,
   showKeyboardMouse: boolean,
-  selectedPresetId: string | null = null
+  selectedPresetId: string | null = null,
+  simultaneousDisplay = false
 ): AppSettings {
   return {
     schemaVersion: 1,
@@ -20,6 +22,8 @@ function settings(
       opacity: 0.92,
       showController,
       showKeyboardMouse,
+      simultaneousDisplay,
+      presetSkin: "default",
       clickThrough: false,
       lockPosition: false,
       obsMode: false,
@@ -65,6 +69,15 @@ describe("display device resolution", () => {
     );
   });
 
+  it("shows both layers when simultaneous display is enabled", () => {
+    expect(
+      resolveDisplayDevice(settings(true, true, null, true), controller(false))
+    ).toBe("both");
+    expect(
+      resolveDisplayDevice(settings(true, true, null, true), controller(true))
+    ).toBe("both");
+  });
+
   it("falls back to the keyboard/mouse layer when both layers are disabled", () => {
     const next = settings(false, false);
 
@@ -86,17 +99,32 @@ describe("display device resolution", () => {
     expect(next.overlay.selectedPresetId).toBeNull();
     expect(next.overlay.showController).toBe(false);
     expect(next.overlay.showKeyboardMouse).toBe(true);
+    expect(next.overlay.simultaneousDisplay).toBe(false);
     expect(deviceSelectValue(next)).toBe(KEYBOARD_MOUSE_PRESET_VALUE);
   });
 
-  it("maps the automatic select value to dual-enabled device recognition", () => {
+  it("maps the simultaneous select value to dual display", () => {
     const next = settings(false, true, "dualsense");
+
+    applyDeviceSelection(next, BOTH_DISPLAY_VALUE);
+
+    expect(next.overlay.selectedPresetId).toBeNull();
+    expect(next.overlay.showController).toBe(true);
+    expect(next.overlay.showKeyboardMouse).toBe(true);
+    expect(next.overlay.simultaneousDisplay).toBe(true);
+    expect(deviceSelectValue(next)).toBe(BOTH_DISPLAY_VALUE);
+    expect(resolveDisplayDevice(next, controller(true))).toBe("both");
+  });
+
+  it("maps the automatic select value to dual-enabled device recognition", () => {
+    const next = settings(false, true, "dualsense", true);
 
     applyDeviceSelection(next, "");
 
     expect(next.overlay.selectedPresetId).toBeNull();
     expect(next.overlay.showController).toBe(true);
     expect(next.overlay.showKeyboardMouse).toBe(true);
+    expect(next.overlay.simultaneousDisplay).toBe(false);
     expect(deviceSelectValue(next)).toBe("");
   });
 
@@ -108,6 +136,7 @@ describe("display device resolution", () => {
     expect(next.overlay.selectedPresetId).toBe("xbox-controller");
     expect(next.overlay.showController).toBe(true);
     expect(next.overlay.showKeyboardMouse).toBe(false);
+    expect(next.overlay.simultaneousDisplay).toBe(false);
     expect(deviceSelectValue(next)).toBe("xbox-controller");
   });
 });

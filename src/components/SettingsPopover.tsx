@@ -8,6 +8,7 @@ import {
 } from "react";
 import type {
   AppSettings,
+  PresetSkin,
   ProfileInfo,
   SimulationScenario
 } from "../types/controller";
@@ -26,8 +27,21 @@ type Range = {
 const OPACITY: Range = { min: 0.25, max: 1, step: 0.01, coarse: 0.05, default: 0.92 };
 
 const NUMBER_COMMIT_DEBOUNCE_MS = 500;
+const SLIDER_COMMIT_DEBOUNCE_MS = 150;
 
 const SCENARIO_OPTIONS: SimulationScenario[] = ["sweep", "buttons", "triggers", "hotPlug"];
+const SKIN_OPTIONS: PresetSkin[] = ["default", "black", "white"];
+
+const DEFAULT_INPUT = {
+  leftStickDeadzone: 0.08,
+  rightStickDeadzone: 0.08,
+  triggerDeadzone: 0.02,
+  stickSensitivity: 1.0,
+  triggerSensitivity: 1.0,
+  invertLeftY: false,
+  invertRightY: false,
+  invertDpadY: false
+};
 
 type SettingsPopoverProps = {
   settings: AppSettings;
@@ -47,6 +61,7 @@ export function SettingsPopover({
   onUpdate
 }: SettingsPopoverProps) {
   const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (!open) {
@@ -66,6 +81,12 @@ export function SettingsPopover({
 
     document.addEventListener("pointerdown", onPointerDown);
     document.addEventListener("keydown", onKeyDown);
+
+    // Focus the dialog when opened so keyboard users land inside it.
+    window.requestAnimationFrame(() => {
+      dialogRef.current?.querySelector<HTMLElement>("input, select, button")?.focus();
+    });
+
     return () => {
       document.removeEventListener("pointerdown", onPointerDown);
       document.removeEventListener("keydown", onKeyDown);
@@ -92,7 +113,13 @@ export function SettingsPopover({
       </button>
 
       {open ? (
-        <div className="adjust-popover" role="dialog" aria-label={labels.settings.title}>
+        <div
+          className="adjust-popover"
+          role="dialog"
+          aria-modal="true"
+          aria-label={labels.settings.title}
+          ref={dialogRef}
+        >
           <SliderField
             icon={<Eye size={16} />}
             label={labels.settings.opacity}
@@ -101,6 +128,29 @@ export function SettingsPopover({
             onChange={setOpacity}
             labels={labels}
           />
+
+          <section className="adjust-section">
+            <h3>{labels.settings.presetSkin}</h3>
+            <label className="adjust-row">
+              <span>{labels.settings.presetSkin}</span>
+              <select
+                className="adjust-select"
+                value={settings.overlay.presetSkin}
+                onChange={(event) =>
+                  onUpdate((next) => {
+                    next.overlay.presetSkin = event.target.value as PresetSkin;
+                    return next;
+                  })
+                }
+              >
+                {SKIN_OPTIONS.map((skin) => (
+                  <option key={skin} value={skin}>
+                    {labels.settings.skins[skin]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </section>
 
           <section className="adjust-section">
             <h3>{labels.settings.input}</h3>
@@ -220,6 +270,21 @@ export function SettingsPopover({
                 })
               }
             />
+            {settings.simulation.enabled ? (
+              <button
+                type="button"
+                className="adjust-reset"
+                onClick={() =>
+                  onUpdate((next) => {
+                    next.simulation.enabled = false;
+                    return next;
+                  })
+                }
+              >
+                <span>{labels.settings.disableSimulation}</span>
+              </button>
+            ) : null}
+            <p className="adjust-note">{labels.settings.simulationPresetHint}</p>
             <label className="adjust-row">
               <span>{labels.settings.simulationDevice}</span>
               <select
@@ -260,6 +325,8 @@ export function SettingsPopover({
             </label>
           </section>
 
+          <p className="adjust-note">{labels.settings.trayOnlyNote}</p>
+
           <button
             type="button"
             className="adjust-reset"
@@ -267,6 +334,19 @@ export function SettingsPopover({
           >
             <RotateCcw size={14} />
             <span>{labels.settings.resetOpacity}</span>
+          </button>
+          <button
+            type="button"
+            className="adjust-reset"
+            onClick={() =>
+              onUpdate((next) => {
+                next.input = { ...DEFAULT_INPUT };
+                return next;
+              })
+            }
+          >
+            <RotateCcw size={14} />
+            <span>{labels.settings.resetInput}</span>
           </button>
         </div>
       ) : null}
@@ -393,6 +473,11 @@ function CheckField({
   );
 }
 
+/**
+ * Slider with local preview while dragging; commits to settings after a short
+ * debounce (or immediately for stepper buttons) so continuous drag does not
+ * spam update_settings.
+ */
 function SliderField({
   icon,
   label,
@@ -408,15 +493,47 @@ function SliderField({
   onChange: (value: number) => void;
   labels: Translation;
 }) {
-  const percent = Math.round(value * 100);
-  const fill = ((value - range.min) / (range.max - range.min)) * 100;
+  const [draft, setDraft] = useState(value);
+  const timerRef = useRef<number | null>(null);
+  const draggingRef = useRef(false);
 
-  const step = (delta: number) =>
-    onChange(clamp(roundStep(value + delta), range.min, range.max));
+  useEffect(() => {
+    if (!draggingRef.current) {
+      setDraft(value);
+    }
+  }, [value]);
 
-  const handleChange = (newValue: number) => {
-    onChange(clamp(roundStep(newValue), range.min, range.max));
+  useEffect(
+    () => () => {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+      }
+    },
+    []
+  );
+
+  const percent = Math.round(draft * 100);
+  const fill = ((draft - range.min) / (range.max - range.min)) * 100;
+
+  const commit = (next: number) => {
+    const clamped = clamp(roundStep(next), range.min, range.max);
+    setDraft(clamped);
+    onChange(clamped);
   };
+
+  const scheduleCommit = (next: number) => {
+    const clamped = clamp(roundStep(next), range.min, range.max);
+    setDraft(clamped);
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+    }
+    timerRef.current = window.setTimeout(() => {
+      timerRef.current = null;
+      onChange(clamped);
+    }, SLIDER_COMMIT_DEBOUNCE_MS);
+  };
+
+  const step = (delta: number) => commit(draft + delta);
 
   return (
     <div className="adjust-field">
@@ -432,7 +549,7 @@ function SliderField({
           type="button"
           className="adjust-stepper"
           aria-label={labels.settings.decrease(label)}
-          disabled={value <= range.min}
+          disabled={draft <= range.min}
           onClick={() => step(-range.coarse)}
           onPointerDown={(e) => e.preventDefault()}
         >
@@ -444,20 +561,31 @@ function SliderField({
           min={range.min}
           max={range.max}
           step={range.step}
-          value={value}
+          value={draft}
           aria-label={label}
           aria-valuemin={range.min}
           aria-valuemax={range.max}
-          aria-valuenow={value}
+          aria-valuenow={draft}
           aria-valuetext={`${percent}%`}
           style={{ "--fill": `${fill}%` } as CSSProperties}
-          onChange={(event) => handleChange(Number(event.target.value))}
+          onPointerDown={() => {
+            draggingRef.current = true;
+          }}
+          onPointerUp={() => {
+            draggingRef.current = false;
+            if (timerRef.current !== null) {
+              window.clearTimeout(timerRef.current);
+              timerRef.current = null;
+            }
+            onChange(clamp(roundStep(draft), range.min, range.max));
+          }}
+          onChange={(event) => scheduleCommit(Number(event.target.value))}
         />
         <button
           type="button"
           className="adjust-stepper"
           aria-label={labels.settings.increase(label)}
-          disabled={value >= range.max}
+          disabled={draft >= range.max}
           onClick={() => step(range.coarse)}
           onPointerDown={(e) => e.preventDefault()}
         >

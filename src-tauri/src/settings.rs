@@ -34,11 +34,26 @@ pub struct OverlaySettings {
     pub show_controller: bool,
     #[serde(default = "default_true")]
     pub show_keyboard_mouse: bool,
+    /// When both layers are enabled, show them side-by-side instead of auto-switching.
+    #[serde(default)]
+    pub simultaneous_display: bool,
+    /// Skin/color variant for presets that ship black/white assets.
+    #[serde(default)]
+    pub preset_skin: PresetSkin,
     pub click_through: bool,
     pub lock_position: bool,
     #[serde(default)]
     pub obs_mode: bool,
     pub window: WindowSettings,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum PresetSkin {
+    #[default]
+    Default,
+    Black,
+    White,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -90,6 +105,8 @@ impl Default for AppSettings {
                 opacity: 0.92,
                 show_controller: true,
                 show_keyboard_mouse: true,
+                simultaneous_display: false,
+                preset_skin: PresetSkin::Default,
                 click_through: false,
                 lock_position: false,
                 obs_mode: false,

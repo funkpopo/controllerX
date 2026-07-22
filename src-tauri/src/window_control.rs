@@ -17,7 +17,7 @@ const MIN_WINDOW_WIDTH: u32 = 420;
 const MIN_WINDOW_HEIGHT: u32 = 260;
 pub fn configure_main_window(
     app: &AppHandle,
-    settings_state: Arc<Mutex<AppSettings>>,
+    settings_state: Arc<Mutex<Arc<AppSettings>>>,
 ) -> Result<(), String> {
     let Some(window) = app.get_webview_window(MAIN_WINDOW) else {
         return Err("Main window was not created.".to_string());
@@ -26,6 +26,7 @@ pub fn configure_main_window(
     let settings = settings_state
         .lock()
         .map_err(|_| "Settings lock is poisoned.".to_string())?
+        .as_ref()
         .clone();
 
     window
@@ -87,7 +88,7 @@ pub fn toggle_main_window(app: &AppHandle) -> Result<bool, String> {
 
 pub fn set_click_through(
     app: &AppHandle,
-    settings_state: &Arc<Mutex<AppSettings>>,
+    settings_state: &Arc<Mutex<Arc<AppSettings>>>,
     enabled: bool,
 ) -> Result<AppSettings, String> {
     let window = main_window(app)?;
@@ -104,7 +105,7 @@ pub fn set_click_through(
 
 pub fn set_lock_position(
     app: &AppHandle,
-    settings_state: &Arc<Mutex<AppSettings>>,
+    settings_state: &Arc<Mutex<Arc<AppSettings>>>,
     enabled: bool,
 ) -> Result<AppSettings, String> {
     let window = main_window(app)?;
@@ -121,7 +122,7 @@ pub fn set_lock_position(
 
 pub fn set_obs_mode(
     app: &AppHandle,
-    settings_state: &Arc<Mutex<AppSettings>>,
+    settings_state: &Arc<Mutex<Arc<AppSettings>>>,
     enabled: bool,
 ) -> Result<AppSettings, String> {
     let window = main_window(app)?;
@@ -138,7 +139,7 @@ pub fn set_obs_mode(
 
 pub fn update_settings(
     app: &AppHandle,
-    settings_state: &Arc<Mutex<AppSettings>>,
+    settings_state: &Arc<Mutex<Arc<AppSettings>>>,
     edit: impl FnOnce(&mut AppSettings),
 ) -> Result<AppSettings, String> {
     let snapshot = update_settings_in_memory(settings_state, edit)?;
@@ -147,20 +148,23 @@ pub fn update_settings(
 }
 
 fn update_settings_in_memory(
-    settings_state: &Arc<Mutex<AppSettings>>,
+    settings_state: &Arc<Mutex<Arc<AppSettings>>>,
     edit: impl FnOnce(&mut AppSettings),
 ) -> Result<AppSettings, String> {
-    let mut settings = settings_state
+    let mut guard = settings_state
         .lock()
         .map_err(|_| "Settings lock is poisoned.".to_string())?;
-    edit(&mut settings);
-    settings::sanitize(&mut settings);
-    Ok(settings.clone())
+    let mut next = guard.as_ref().clone();
+    edit(&mut next);
+    settings::sanitize(&mut next);
+    let snapshot = next.clone();
+    *guard = Arc::new(next);
+    Ok(snapshot)
 }
 
 pub fn replace_settings(
     app: &AppHandle,
-    settings_state: &Arc<Mutex<AppSettings>>,
+    settings_state: &Arc<Mutex<Arc<AppSettings>>>,
     mut next_settings: AppSettings,
 ) -> Result<AppSettings, String> {
     settings::sanitize(&mut next_settings);
@@ -184,8 +188,9 @@ pub fn replace_settings(
         let mut settings = settings_state
             .lock()
             .map_err(|_| "Settings lock is poisoned.".to_string())?;
-        *settings = next_settings;
-        settings.clone()
+        let owned = next_settings;
+        *settings = Arc::new(owned.clone());
+        owned
     };
     settings::save(app, &snapshot)?;
     Ok(snapshot)
@@ -194,7 +199,7 @@ pub fn replace_settings(
 fn attach_window_persistence(
     app: AppHandle,
     window: WebviewWindow,
-    settings_state: Arc<Mutex<AppSettings>>,
+    settings_state: Arc<Mutex<Arc<AppSettings>>>,
 ) {
     let save_trigger = spawn_debounced_settings_saver(app.clone(), settings_state.clone());
     let event_window = window.clone();
@@ -234,7 +239,7 @@ fn attach_window_persistence(
 /// never holds the settings lock during IO.
 fn spawn_debounced_settings_saver(
     app: AppHandle,
-    settings_state: Arc<Mutex<AppSettings>>,
+    settings_state: Arc<Mutex<Arc<AppSettings>>>,
 ) -> mpsc::Sender<()> {
     let (sender, receiver) = mpsc::channel::<()>();
     std::thread::spawn(move || {
@@ -242,7 +247,7 @@ fn spawn_debounced_settings_saver(
             while receiver.recv_timeout(WINDOW_SAVE_DEBOUNCE).is_ok() {}
 
             let snapshot = match settings_state.lock() {
-                Ok(settings) => settings.clone(),
+                Ok(settings) => settings.as_ref().clone(),
                 Err(_) => {
                     emit_command_error(&app, "Settings lock is poisoned.".to_string());
                     continue;

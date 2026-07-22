@@ -1,8 +1,16 @@
-import type { ControllerSnapshot, OverlayPreset } from "../types/controller";
+import type {
+  ControllerSnapshot,
+  OverlayPreset,
+  PresetSkin
+} from "../types/controller";
 
 const INPUT_OVERLAY_ROOT = "/vendor/input-overlay";
 
-export const OVERLAY_PRESETS: OverlayPreset[] = [
+type PresetDefinition = OverlayPreset & {
+  skins: Partial<Record<PresetSkin, string>>;
+};
+
+const PRESET_DEFINITIONS: PresetDefinition[] = [
   {
     id: "xbox-controller",
     label: "Xbox",
@@ -10,7 +18,12 @@ export const OVERLAY_PRESETS: OverlayPreset[] = [
     profileIds: ["xbox-360", "xbox-series", "generic-xinput"],
     image: `${INPUT_OVERLAY_ROOT}/xbox-controller/xbox-controller.png`,
     config: `${INPUT_OVERLAY_ROOT}/xbox-controller/xbox-controller.json`,
-    source: "input-overlay/presets/xbox-controller"
+    source: "input-overlay/presets/xbox-controller",
+    skins: {
+      default: `${INPUT_OVERLAY_ROOT}/xbox-controller/xbox-controller.png`,
+      black: `${INPUT_OVERLAY_ROOT}/xbox-controller/xbox-controller-black.png`,
+      white: `${INPUT_OVERLAY_ROOT}/xbox-controller/xbox-controller-white.png`
+    }
   },
   {
     id: "xbox-one-controller",
@@ -19,7 +32,10 @@ export const OVERLAY_PRESETS: OverlayPreset[] = [
     profileIds: ["xbox-one"],
     image: `${INPUT_OVERLAY_ROOT}/xbox-one-controller/xbox-one-controller.png`,
     config: `${INPUT_OVERLAY_ROOT}/xbox-one-controller/xbox-one-controller.json`,
-    source: "input-overlay/presets/xbox-one-controller"
+    source: "input-overlay/presets/xbox-one-controller",
+    skins: {
+      default: `${INPUT_OVERLAY_ROOT}/xbox-one-controller/xbox-one-controller.png`
+    }
   },
   {
     id: "dualsense",
@@ -28,7 +44,12 @@ export const OVERLAY_PRESETS: OverlayPreset[] = [
     profileIds: ["dualsense"],
     image: `${INPUT_OVERLAY_ROOT}/dualsense/dualsense.png`,
     config: `${INPUT_OVERLAY_ROOT}/dualsense/dualsense.json`,
-    source: "input-overlay/presets/dualsense"
+    source: "input-overlay/presets/dualsense",
+    skins: {
+      default: `${INPUT_OVERLAY_ROOT}/dualsense/dualsense.png`,
+      black: `${INPUT_OVERLAY_ROOT}/dualsense/dualsenseblack.png`,
+      white: `${INPUT_OVERLAY_ROOT}/dualsense/dualsensewhite.png`
+    }
   },
   {
     id: "ds3",
@@ -37,9 +58,35 @@ export const OVERLAY_PRESETS: OverlayPreset[] = [
     profileIds: ["dualshock-3"],
     image: `${INPUT_OVERLAY_ROOT}/ds3/ds3.png`,
     config: `${INPUT_OVERLAY_ROOT}/ds3/overlay.json`,
-    source: "input-overlay/presets/ds3"
+    source: "input-overlay/presets/ds3",
+    skins: {
+      default: `${INPUT_OVERLAY_ROOT}/ds3/ds3.png`,
+      black: `${INPUT_OVERLAY_ROOT}/ds3/ds3_black.png`,
+      white: `${INPUT_OVERLAY_ROOT}/ds3/ds3_white.png`
+    }
   }
 ];
+
+export const OVERLAY_PRESETS: OverlayPreset[] = PRESET_DEFINITIONS.map(
+  ({ skins: _skins, ...preset }) => preset
+);
+
+export function applyPresetSkin(
+  preset: OverlayPreset,
+  skin: PresetSkin
+): OverlayPreset {
+  const definition = PRESET_DEFINITIONS.find((item) => item.id === preset.id);
+  if (!definition) {
+    return preset;
+  }
+
+  const image = definition.skins[skin] ?? definition.skins.default ?? preset.image;
+  if (image === preset.image) {
+    return preset;
+  }
+
+  return { ...preset, image };
+}
 
 export function selectPreset(
   controller: ControllerSnapshot,
@@ -66,4 +113,3 @@ export function selectPreset(
 
   return matched;
 }
-

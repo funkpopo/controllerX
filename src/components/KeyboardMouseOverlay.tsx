@@ -53,7 +53,9 @@ export function KeyboardMouseOverlay({
               }`}
             />
             <span
-              className="mouse-wheel"
+              className={`mouse-wheel ${
+                keyboardMouse.mouseButtons.middle ? "active" : ""
+              }`}
             />
             <span
               className={`mouse-side mouse-x1 ${

@@ -21,7 +21,7 @@ describe("keyboard/mouse mapping", () => {
     expect(KEYBOARD_ROWS.flat()).toHaveLength(64);
   });
 
-  it("treats generic and left/right modifier virtual keys as the same visual key", () => {
+  it("maps left/right modifier virtual keys to their side-specific keys", () => {
     expect(isKeyboardKeyActive(layoutKey("left-shift"), new Set([VK.shift]))).toBe(
       true
     );
@@ -31,8 +31,14 @@ describe("keyboard/mouse mapping", () => {
     expect(isKeyboardKeyActive(layoutKey("right-shift"), new Set([VK.rightShift]))).toBe(
       true
     );
-    expect(isKeyboardKeyActive(layoutKey("control"), new Set([VK.rightControl]))).toBe(
+    expect(isKeyboardKeyActive(layoutKey("left-control"), new Set([VK.leftControl]))).toBe(
       true
+    );
+    expect(isKeyboardKeyActive(layoutKey("right-control"), new Set([VK.rightControl]))).toBe(
+      true
+    );
+    expect(isKeyboardKeyActive(layoutKey("left-control"), new Set([VK.rightControl]))).toBe(
+      false
     );
   });
 

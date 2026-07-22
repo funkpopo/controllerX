@@ -1,4 +1,11 @@
-import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import {
+  memo,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties
+} from "react";
 import {
   DPAD_DIRECTIONS,
   dpadDirectionForElement,
@@ -212,7 +219,7 @@ export function ControllerOverlay({
   );
 }
 
-function DpadSpriteLayers({
+const DpadSpriteLayers = memo(function DpadSpriteLayers({
   image,
   element,
   controller
@@ -236,76 +243,94 @@ function DpadSpriteLayers({
       ))}
     </>
   );
-}
+});
 
-function SpriteLayer({
-  image,
-  element,
-  renderState,
-  className,
-  clipPath,
-  dataDirection
-}: {
-  image: string;
-  element: OverlayElement;
-  renderState: ElementRenderState;
-  className?: string;
-  clipPath?: string;
-  dataDirection?: string;
-}) {
-  const [sourceX, sourceY, width, height] = element.mapping;
-  const [left, top] = element.pos;
-  const dpadDirection = dpadDirectionForElement(element);
+const SpriteLayer = memo(
+  function SpriteLayer({
+    image,
+    element,
+    renderState,
+    className,
+    clipPath,
+    dataDirection
+  }: {
+    image: string;
+    element: OverlayElement;
+    renderState: ElementRenderState;
+    className?: string;
+    clipPath?: string;
+    dataDirection?: string;
+  }) {
+    const [sourceX, sourceY, width, height] = element.mapping;
+    const [left, top] = element.pos;
+    const dpadDirection = dpadDirectionForElement(element);
 
-  if (!shouldRenderElement(element, renderState)) {
-    return null;
-  }
+    if (!shouldRenderElement(element, renderState)) {
+      return null;
+    }
 
-  const active = isElementActive(element, renderState);
-  const overlayOpacity =
-    element.type === 0 ? 1 : Math.min(1, 0.42 + renderState.value * 0.58);
-  const resolvedClipPath =
-    clipPath ??
-    (renderState.clipRatio === null
-      ? null
-      : `inset(${Math.max(0, 1 - renderState.clipRatio) * 100}% 0 0 0)`);
-  const clipStyle = resolvedClipPath === null ? {} : { clipPath: resolvedClipPath };
+    const active = isElementActive(element, renderState);
+    const overlayOpacity =
+      element.type === 0 ? 1 : Math.min(1, 0.42 + renderState.value * 0.58);
+    const resolvedClipPath =
+      clipPath ??
+      (renderState.clipRatio === null
+        ? null
+        : `inset(${Math.max(0, 1 - renderState.clipRatio) * 100}% 0 0 0)`);
+    const clipStyle = resolvedClipPath === null ? {} : { clipPath: resolvedClipPath };
+    // Only promote stick/trigger layers while active so will-change is not
+    // applied to every idle sprite on the tree.
+    const promoteCompositor =
+      active && (element.type === 5 || element.type === 6);
 
-  const style = {
-    left,
-    top,
-    width,
-    height,
-    opacity: overlayOpacity,
-    transform: `translate(${renderState.x}px, ${renderState.y}px)`,
-    "--sprite-image": `url("${image}")`,
-    "--sprite-position": `-${sourceX}px -${sourceY}px`,
-    "--sprite-active-strength": `${Math.min(1, Math.max(0, renderState.value))}`,
-    ...clipStyle
-  } satisfies SpriteStyle;
+    const style = {
+      left,
+      top,
+      width,
+      height,
+      opacity: overlayOpacity,
+      transform: `translate(${renderState.x}px, ${renderState.y}px)`,
+      willChange: promoteCompositor ? "transform, opacity" : "auto",
+      "--sprite-image": `url("${image}")`,
+      "--sprite-position": `-${sourceX}px -${sourceY}px`,
+      "--sprite-active-strength": `${Math.min(1, Math.max(0, renderState.value))}`,
+      ...clipStyle
+    } satisfies SpriteStyle;
 
-  return (
-    <div
-      className={[
-        "sprite-layer",
-        `sprite-type-${element.type}`,
-        elementClassName(element),
-        elementFillClassName(element),
-        dpadDirection ? `sprite-dpad-${dpadDirection}` : "",
-        className,
-        active ? "sprite-active" : ""
-      ]
-        .filter(Boolean)
-        .join(" ")}
-      data-active={active ? "true" : "false"}
-      data-direction={dataDirection}
-      style={style}
-    >
-      <span className="sprite-fill" aria-hidden="true" />
-      <span className="sprite-image" aria-hidden="true" />
-    </div>
-  );
-}
+    return (
+      <div
+        className={[
+          "sprite-layer",
+          `sprite-type-${element.type}`,
+          elementClassName(element),
+          elementFillClassName(element),
+          dpadDirection ? `sprite-dpad-${dpadDirection}` : "",
+          className,
+          active ? "sprite-active" : ""
+        ]
+          .filter(Boolean)
+          .join(" ")}
+        data-active={active ? "true" : "false"}
+        data-direction={dataDirection}
+        style={style}
+      >
+        <span className="sprite-fill" aria-hidden="true" />
+        <span className="sprite-image" aria-hidden="true" />
+      </div>
+    );
+  },
+  (prev, next) =>
+    prev.image === next.image &&
+    prev.element === next.element &&
+    prev.className === next.className &&
+    prev.clipPath === next.clipPath &&
+    prev.dataDirection === next.dataDirection &&
+    prev.renderState.value === next.renderState.value &&
+    prev.renderState.x === next.renderState.x &&
+    prev.renderState.y === next.renderState.y &&
+    prev.renderState.clipRatio === next.renderState.clipRatio &&
+    prev.renderState.analog === next.renderState.analog
+);
 
 function dpadDirectionClipPath(direction: DpadDirection) {
   switch (direction) {

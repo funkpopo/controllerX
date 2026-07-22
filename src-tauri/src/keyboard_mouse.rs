@@ -29,8 +29,8 @@ mod platform {
     use std::sync::mpsc;
     use std::sync::{Arc, Mutex, OnceLock};
     use std::thread;
-    use std::time::Instant;
-    use tauri::AppHandle;
+    use std::time::{Duration, Instant};
+    use tauri::{AppHandle, Manager};
     use windows_sys::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
     use windows_sys::Win32::UI::WindowsAndMessaging::{
         CallNextHookEx, GetMessageW, SetWindowsHookExW, UnhookWindowsHookEx, HC_ACTION, HHOOK,
@@ -39,6 +39,14 @@ mod platform {
         WM_MBUTTONUP, WM_RBUTTONDBLCLK, WM_RBUTTONDOWN, WM_RBUTTONUP, WM_SYSKEYDOWN, WM_SYSKEYUP,
         WM_XBUTTONDBLCLK, WM_XBUTTONDOWN, WM_XBUTTONUP, XBUTTON1, XBUTTON2,
     };
+
+    use crate::window_control::MAIN_WINDOW;
+
+    /// Coalesce hook-driven snapshots to ~60/s so high-rate typing/clicking does
+    /// not flood the webview; the hook thread still records every edge.
+    const SNAPSHOT_EMIT_MIN_INTERVAL: Duration = Duration::from_millis(16);
+    /// While the overlay is hidden, keep hook state warm but emit much less often.
+    const HIDDEN_EMIT_MIN_INTERVAL: Duration = Duration::from_millis(200);
 
     static HOOK_STATE: OnceLock<Arc<Mutex<HookSharedState>>> = OnceLock::new();
 
@@ -90,9 +98,66 @@ mod platform {
         shared: Arc<Mutex<HookSharedState>>,
         event_receiver: mpsc::Receiver<InputSignal>,
     ) {
-        while event_receiver.recv().is_ok() {
+        let mut last_emit = Instant::now() - SNAPSHOT_EMIT_MIN_INTERVAL;
+        let mut pending = false;
+        let mut was_visible = true;
+
+        loop {
+            let window_visible = main_window_visible(&app);
+            if window_visible && !was_visible {
+                // Force a fresh snapshot when the overlay returns so the UI is
+                // not stuck on a stale pre-hide state.
+                pending = true;
+            }
+            was_visible = window_visible;
+
+            let min_interval = if window_visible {
+                SNAPSHOT_EMIT_MIN_INTERVAL
+            } else {
+                HIDDEN_EMIT_MIN_INTERVAL
+            };
+
+            // Block until the next hook signal, or until a pending emit is due.
+            let wait = if pending {
+                min_interval.saturating_sub(last_emit.elapsed())
+            } else {
+                Duration::from_secs(3600)
+            };
+
+            match event_receiver.recv_timeout(wait) {
+                Ok(_) => {
+                    pending = true;
+                    // Drain any backlog so one emit covers the latest state.
+                    while event_receiver.try_recv().is_ok() {}
+                }
+                Err(mpsc::RecvTimeoutError::Timeout) => {}
+                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+            }
+
+            if !pending {
+                continue;
+            }
+
+            if last_emit.elapsed() < min_interval {
+                continue;
+            }
+
+            // When hidden, still coalesce but do not push high-rate traffic.
+            // State continues to be updated by hooks regardless.
+            if !window_visible && last_emit.elapsed() < HIDDEN_EMIT_MIN_INTERVAL {
+                continue;
+            }
+
             emit_or_log(&app, "keyboard-mouse-state", take_snapshot(&shared));
+            last_emit = Instant::now();
+            pending = false;
         }
+    }
+
+    fn main_window_visible(app: &AppHandle) -> bool {
+        app.get_webview_window(MAIN_WINDOW)
+            .and_then(|window| window.is_visible().ok())
+            .unwrap_or(true)
     }
 
     fn install_hook_loop(app: AppHandle) {

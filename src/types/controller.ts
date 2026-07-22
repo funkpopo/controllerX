@@ -142,11 +142,17 @@ export type WindowSettings = {
 
 export type AppLanguage = "zhCn" | "en";
 
+export type PresetSkin = "default" | "black" | "white";
+
 export type OverlaySettings = {
   selectedPresetId: string | null;
   opacity: number;
   showController: boolean;
   showKeyboardMouse: boolean;
+  /** When both layers are enabled, show them together instead of auto-switching. */
+  simultaneousDisplay: boolean;
+  /** Skin/color variant for input-overlay presets that ship black/white assets. */
+  presetSkin: PresetSkin;
   clickThrough: boolean;
   lockPosition: boolean;
   obsMode: boolean;
