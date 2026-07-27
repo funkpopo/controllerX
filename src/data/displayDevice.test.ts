@@ -30,8 +30,8 @@ function settings(
       window: {
         x: null,
         y: null,
-        width: 720,
-        height: 438
+        width: 600,
+        height: 360
       }
     },
     input: {

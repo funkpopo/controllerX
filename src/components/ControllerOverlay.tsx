@@ -43,9 +43,11 @@ type ControllerOverlayProps = {
 
 type SpriteStyle = CSSProperties & Record<`--${string}`, string>;
 
-const HIGHLIGHT_SAFE_PADDING_MIN_PX = 8;
-const HIGHLIGHT_SAFE_PADDING_MAX_PX = 14;
-const HIGHLIGHT_SAFE_PADDING_RATIO = 0.025;
+// Keep highlight glow visible without eating too much of the fit box — the
+// window is meant to hug the controller, so padding stays tight.
+const HIGHLIGHT_SAFE_PADDING_MIN_PX = 4;
+const HIGHLIGHT_SAFE_PADDING_MAX_PX = 10;
+const HIGHLIGHT_SAFE_PADDING_RATIO = 0.018;
 
 export function ControllerOverlay({
   preset,

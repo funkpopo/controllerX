@@ -13,8 +13,8 @@ pub const MAIN_WINDOW: &str = "main";
 /// How long the window must stay still before move/resize changes hit the disk.
 const WINDOW_SAVE_DEBOUNCE: Duration = Duration::from_millis(500);
 const SCREEN_EDGE_MARGIN: i32 = 8;
-const MIN_WINDOW_WIDTH: u32 = 420;
-const MIN_WINDOW_HEIGHT: u32 = 260;
+const MIN_WINDOW_WIDTH: u32 = 360;
+const MIN_WINDOW_HEIGHT: u32 = 220;
 pub fn configure_main_window(
     app: &AppHandle,
     settings_state: Arc<Mutex<Arc<AppSettings>>>,
@@ -561,7 +561,7 @@ mod tests {
         );
         assert_eq!(
             clamp_logical_size_to_work_area(720, 320, work_area, 2.0),
-            (420, 292)
+            (392, 292)
         );
     }
 

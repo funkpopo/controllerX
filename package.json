@@ -1,6 +1,6 @@
 {
   "name": "controllerx",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Transparent desktop input overlay for controllers, keyboards, and mice.",
   "type": "module",
   "scripts": {

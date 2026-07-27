@@ -76,12 +76,12 @@ textarea {
 .toolbar {
   position: relative;
   z-index: 70;
-  min-height: 42px;
+  min-height: 38px;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 8px;
-  padding: 6px 8px;
+  padding: 4px 6px;
   color: #ecf6f7;
   background: rgba(16, 21, 24, 0.62);
   border-bottom: 1px solid rgba(226, 242, 243, 0.12);
@@ -661,19 +661,20 @@ textarea {
 .overlay-workspace {
   position: relative;
   min-width: 0;
-  min-height: 200px;
+  min-height: 0;
   display: grid;
   place-items: center;
-  padding: clamp(2px, 1vw, 6px);
+  padding: 2px;
   background: transparent;
   overflow: hidden;
 }
 
 .overlay-workspace.layout-both {
-  grid-template-columns: minmax(0, 1.1fr) minmax(0, 1fr);
-  gap: clamp(4px, 1vw, 10px);
-  align-items: center;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 0.95fr);
+  gap: 4px;
+  align-items: stretch;
   justify-items: stretch;
+  padding: 2px;
 }
 
 .overlay-pane {
@@ -696,7 +697,7 @@ textarea {
 
 .overlay-shell {
   position: absolute;
-  inset: clamp(2px, 1vw, 4px);
+  inset: 2px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -916,20 +917,32 @@ textarea {
 
 .keyboard-mouse-overlay {
   position: absolute;
-  left: 50%;
-  top: 50%;
-  bottom: auto;
+  inset: 2px;
   z-index: 26;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  min-height: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+}
+
+.keyboard-mouse-stage-viewport {
+  position: relative;
+  overflow: visible;
+  filter: drop-shadow(0 12px 18px rgba(0, 0, 0, 0.32));
+}
+
+.keyboard-mouse-stage {
+  position: absolute;
+  inset: 0 auto auto 0;
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  gap: 10px;
+  gap: 8px;
   width: max-content;
-  pointer-events: none;
-  filter: drop-shadow(0 16px 24px rgba(0, 0, 0, 0.34));
-  transform: translate(-50%, -50%) scale(0.74);
-  transform-origin: center;
-  transition: opacity 120ms ease;
+  transform-origin: top left;
 }
 
 .keyboard-panel,
@@ -941,19 +954,19 @@ textarea {
   backdrop-filter: blur(18px);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    0 16px 34px rgba(0, 0, 0, 0.3);
+    0 12px 26px rgba(0, 0, 0, 0.28);
 }
 
 .keyboard-panel {
   display: grid;
-  gap: 4px;
-  padding: 6px;
+  gap: 3px;
+  padding: 5px;
 }
 
 .keyboard-row {
   display: flex;
   justify-content: center;
-  gap: 4px;
+  gap: 3px;
 }
 
 .keyboard-key {
@@ -965,8 +978,8 @@ textarea {
     rgba(255, 255, 255, 0.065)
   );
   border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 7px;
-  font-size: 12px;
+  border-radius: 6px;
+  font-size: 11px;
   line-height: 1;
   font-weight: 500;
   font-variant-numeric: tabular-nums;
@@ -983,11 +996,11 @@ textarea {
 }
 
 .keyboard-key {
-  height: 48px;
+  height: 42px;
   flex: 0 0 auto;
   align-items: flex-start;
   justify-content: flex-start;
-  padding: 5px 7px;
+  padding: 4px 6px;
 }
 
 .keyboard-key.active,
@@ -1012,30 +1025,30 @@ textarea {
 
 .keyboard-key-top {
   position: absolute;
-  top: 5px;
-  left: 7px;
+  top: 4px;
+  left: 6px;
 }
 
 .keyboard-key-label {
   position: absolute;
-  left: 7px;
-  bottom: 11px;
+  left: 6px;
+  bottom: 9px;
 }
 
 .keyboard-key-sub {
   position: absolute;
   left: 50%;
   bottom: -2px;
-  font-size: 9px;
+  font-size: 8px;
   line-height: 1;
   transform: translateX(-50%);
 }
 
 .mouse-panel {
-  width: 126px;
+  width: 110px;
   display: grid;
-  gap: 5px;
-  padding: 6px;
+  gap: 4px;
+  padding: 5px;
 }
 
 .mouse-visual {
@@ -1045,15 +1058,15 @@ textarea {
 
 .mouse-shell {
   position: relative;
-  width: 62px;
-  height: 94px;
+  width: 56px;
+  height: 86px;
   overflow: hidden;
   background: linear-gradient(
     rgba(255, 255, 255, 0.12),
     rgba(255, 255, 255, 0.06)
   );
   border: 2px solid rgba(255, 255, 255, 0.3);
-  border-radius: 30px 30px 22px 22px;
+  border-radius: 28px 28px 20px 20px;
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     inset 0 -1px 0 rgba(0, 0, 0, 0.28);
@@ -1063,7 +1076,7 @@ textarea {
   position: absolute;
   top: 0;
   width: 50%;
-  height: 38px;
+  height: 34px;
   background: rgba(255, 255, 255, 0.06);
   border-bottom: 2px solid rgba(255, 255, 255, 0.28);
   transition:
@@ -1075,22 +1088,22 @@ textarea {
 .mouse-left {
   left: 0;
   border-right: 2px solid rgba(255, 255, 255, 0.28);
-  border-radius: 30px 0 6px 0;
+  border-radius: 28px 0 6px 0;
 }
 
 .mouse-right {
   right: 0;
   border-left: 2px solid rgba(0, 0, 0, 0.36);
-  border-radius: 0 30px 0 6px;
+  border-radius: 0 28px 0 6px;
 }
 
 .mouse-wheel {
   position: absolute;
   left: 50%;
-  top: 15px;
+  top: 13px;
   z-index: 2;
-  width: 9px;
-  height: 20px;
+  width: 8px;
+  height: 18px;
   background: rgba(237, 249, 250, 0.78);
   border: 2px solid rgba(255, 255, 255, 0.42);
   border-radius: 8px;
@@ -1103,9 +1116,9 @@ textarea {
 
 .mouse-side {
   position: absolute;
-  left: 5px;
-  width: 13px;
-  height: 9px;
+  left: 4px;
+  width: 12px;
+  height: 8px;
   background: rgba(237, 249, 250, 0.72);
   border: 2px solid rgba(255, 255, 255, 0.42);
   border-radius: 6px;
@@ -1116,11 +1129,11 @@ textarea {
 }
 
 .mouse-x1 {
-  top: 46px;
+  top: 42px;
 }
 
 .mouse-x2 {
-  top: 60px;
+  top: 54px;
 }
 
 .keyboard-mouse-warning {
@@ -1645,7 +1658,8 @@ textarea {
   min-height: 100vh;
 }
 
-.click-through-active .overlay-shell {
+.click-through-active .overlay-shell,
+.click-through-active .keyboard-mouse-overlay {
   inset: 0;
 }
 
@@ -1660,7 +1674,8 @@ textarea {
   background: transparent;
 }
 
-.obs-mode-active .overlay-shell {
+.obs-mode-active .overlay-shell,
+.obs-mode-active .keyboard-mouse-overlay {
   inset: 0;
 }
 
@@ -1716,11 +1731,6 @@ textarea {
     width: calc(100vw - 16px);
   }
 
-  .keyboard-mouse-overlay {
-    bottom: auto;
-    transform: translate(-50%, -50%) scale(0.54);
-  }
-
   .debug-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -1736,8 +1746,9 @@ textarea {
     top: 48px;
   }
 
-  .overlay-workspace {
-    min-height: 180px;
+  .overlay-workspace.layout-both {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1.2fr) minmax(0, 1fr);
   }
 }
 
@@ -1772,10 +1783,6 @@ textarea {
     padding: 14px;
   }
 
-  .keyboard-mouse-overlay {
-    transform: translate(-50%, -50%) scale(0.42);
-  }
-
   .adjust-field-label {
     font-size: 12px;
   }
@@ -1783,19 +1790,11 @@ textarea {
   .adjust-field-value {
     font-size: 13px;
   }
-
-  .overlay-workspace {
-    min-height: 160px;
-  }
 }
 
-@media (max-height: 360px) {
+@media (max-height: 320px) {
   .toolbar {
-    min-height: 38px;
-    padding: 5px 6px;
-  }
-
-  .overlay-workspace {
-    min-height: 140px;
+    min-height: 36px;
+    padding: 4px 6px;
   }
 }

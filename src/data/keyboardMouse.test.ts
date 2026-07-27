@@ -4,6 +4,7 @@ import {
   VK,
   isKeyboardKeyActive,
   keyLabel,
+  keyboardMouseNaturalSize,
   otherPressedKeyLabels
 } from "./keyboardMouse";
 
@@ -19,6 +20,15 @@ function layoutKey(id: string) {
 describe("keyboard/mouse mapping", () => {
   it("defines a fixed 64-key compact keyboard layout", () => {
     expect(KEYBOARD_ROWS.flat()).toHaveLength(64);
+  });
+
+  it("exposes a compact natural stage size for fit-scaling", () => {
+    const size = keyboardMouseNaturalSize();
+    // Wide keyboard+mouse strip that still fits snugly in the default window.
+    expect(size.width).toBeGreaterThan(700);
+    expect(size.width).toBeLessThan(980);
+    expect(size.height).toBeGreaterThan(180);
+    expect(size.height).toBeLessThan(280);
   });
 
   it("maps left/right modifier virtual keys to their side-specific keys", () => {

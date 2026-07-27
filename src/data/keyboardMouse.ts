@@ -78,7 +78,12 @@ export const VK = {
   quote: 0xde
 } as const;
 
-const KEY = 48;
+/** Base unit key size — kept compact so the stage can fill typical overlay windows. */
+export const KEY = 42;
+export const KEYBOARD_KEY_GAP = 3;
+export const KEYBOARD_PANEL_PADDING = 5;
+export const KEYBOARD_MOUSE_GAP = 8;
+export const MOUSE_PANEL_WIDTH = 110;
 
 export const KEYBOARD_ROWS: KeyboardKey[][] = [
   [
@@ -95,10 +100,10 @@ export const KEYBOARD_ROWS: KeyboardKey[][] = [
     key("digit0", "0", VK.digit0, { topLabel: ")" }),
     key("minus", "-", VK.minus, { topLabel: "_" }),
     key("equals", "=", VK.equals, { topLabel: "+" }),
-    key("backspace", "Backspace", VK.backspace, { width: 98 })
+    key("backspace", "Backspace", VK.backspace, { width: 86 })
   ],
   [
-    key("tab", "Tab", VK.tab, { width: 74 }),
+    key("tab", "Tab", VK.tab, { width: 66 }),
     key("q", "Q", VK.q),
     key("w", "W", VK.w),
     key("e", "E", VK.e),
@@ -114,7 +119,7 @@ export const KEYBOARD_ROWS: KeyboardKey[][] = [
     key("backslash", "\\", VK.backslash, { topLabel: "|" })
   ],
   [
-    key("caps-lock", "Caps Lock", VK.capsLock, { width: 90 }),
+    key("caps-lock", "Caps Lock", VK.capsLock, { width: 80 }),
     key("a", "A", VK.a),
     key("s", "S", VK.s),
     key("d", "D", VK.d),
@@ -126,10 +131,10 @@ export const KEYBOARD_ROWS: KeyboardKey[][] = [
     key("l", "L", VK.l),
     key("semicolon", ";", VK.semicolon, { topLabel: ":" }),
     key("quote", "'", VK.quote, { topLabel: '"' }),
-    key("enter", "Enter", VK.enter, { width: 102 })
+    key("enter", "Enter", VK.enter, { width: 90 })
   ],
   [
-    key("left-shift", "L Shift", [VK.shift, VK.leftShift], { width: 104 }),
+    key("left-shift", "L Shift", [VK.shift, VK.leftShift], { width: 92 }),
     key("z", "Z", VK.z),
     key("x", "X", VK.x),
     key("c", "C", VK.c),
@@ -140,23 +145,46 @@ export const KEYBOARD_ROWS: KeyboardKey[][] = [
     key("comma", ",", VK.comma, { topLabel: "<" }),
     key("period", ".", VK.period, { topLabel: ">" }),
     key("slash", "/", VK.slash, { topLabel: "?" }),
-    key("right-shift", "R Shift", VK.rightShift, { width: 62 }),
+    key("right-shift", "R Shift", VK.rightShift, { width: 54 }),
     key("up", "↑", VK.up),
     key("delete", "Del", VK.delete)
   ],
   [
     // Left/right modifiers use distinct codes so each side can highlight alone.
-    key("left-control", "L Ctrl", [VK.control, VK.leftControl], { width: 64 }),
-    key("win", "Win", [VK.leftWindows, VK.rightWindows], { width: 64 }),
-    key("left-alt", "L Alt", [VK.alt, VK.leftAlt], { width: 64 }),
-    key("space", "Space", VK.space, { width: 332 }),
-    key("right-alt", "R Alt", VK.rightAlt, { width: 64 }),
-    key("right-control", "R Ctrl", VK.rightControl, { width: 48 }),
+    key("left-control", "L Ctrl", [VK.control, VK.leftControl], { width: 56 }),
+    key("win", "Win", [VK.leftWindows, VK.rightWindows], { width: 56 }),
+    key("left-alt", "L Alt", [VK.alt, VK.leftAlt], { width: 56 }),
+    key("space", "Space", VK.space, { width: 292 }),
+    key("right-alt", "R Alt", VK.rightAlt, { width: 56 }),
+    key("right-control", "R Ctrl", VK.rightControl, { width: 42 }),
     key("left", "←", VK.left),
     key("down", "↓", VK.down),
     key("right", "→", VK.right)
   ]
 ];
+
+/** Unscaled keyboard+mouse stage size used for first paint before DOM measure. */
+export function keyboardMouseNaturalSize() {
+  const rowWidths = KEYBOARD_ROWS.map(
+    (row) =>
+      row.reduce((sum, keyboardKey) => sum + keyboardKey.width, 0) +
+      KEYBOARD_KEY_GAP * Math.max(0, row.length - 1)
+  );
+  const keyboardWidth =
+    Math.max(...rowWidths, 0) + KEYBOARD_PANEL_PADDING * 2 + 4; // + border
+  const keyboardHeight =
+    KEYBOARD_ROWS.length * KEY +
+    KEYBOARD_KEY_GAP * Math.max(0, KEYBOARD_ROWS.length - 1) +
+    KEYBOARD_PANEL_PADDING * 2 +
+    4;
+  // Mouse panel is CSS-sized; keep a stable estimate that matches styles.css.
+  const mouseWidth = MOUSE_PANEL_WIDTH + 4;
+  const mouseHeight = 118;
+  return {
+    width: keyboardWidth + KEYBOARD_MOUSE_GAP + mouseWidth,
+    height: Math.max(keyboardHeight, mouseHeight)
+  };
+}
 
 const KNOWN_LAYOUT_CODES = new Set(
   KEYBOARD_ROWS.flat().flatMap((keyboardKey) => keyboardKey.codes)
